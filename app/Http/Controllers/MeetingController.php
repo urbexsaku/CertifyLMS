@@ -32,6 +32,9 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use App\Notifications\MeetingReservedNotification;
+use App\Notifications\MeetingCanceledNotification;
+use App\UseCases\Notification\SendNotificationAction;
 
 /**
  * 1on1 面談予約 (Meeting) の HTTP エントリポイント。
@@ -167,6 +170,7 @@ class MeetingController extends Controller
         CoachMeetingLoadService $coachLoadService,
         MeetingQuotaService $quotaService,
         ConsumeQuotaAction $consumeAction,
+        SendNotificationACtion $sendNotificationAction,
     ): RedirectResponse {
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
@@ -216,6 +220,16 @@ class MeetingController extends Controller
             return $meeting->fresh();
         });
 
+        $sendNotificationAction(
+            $meeting->student,
+            new MeetingReservedNotification($meeting),
+        );
+
+        $sendNotificationAction(
+            $meeting->coach,
+            new MeetingReservedNotification($meeting),
+        );
+
         return redirect()
             ->route('meetings.show', $meeting)
             ->with('success', '面談を予約しました。');
@@ -228,6 +242,7 @@ class MeetingController extends Controller
     public function cancel(
         Meeting $meeting,
         RefundQuotaAction $refundAction,
+        SendNotificationACtion $sendNotificationAction,
     ): RedirectResponse {
         $this->authorize('cancel', $meeting);
 
@@ -249,6 +264,16 @@ class MeetingController extends Controller
                 'canceled_at' => now(),
             ]);
         });
+
+        $sendNotificationAction(
+            $meeting->student,
+            new MeetingCanceledNotification($meeting),
+        );
+
+        $sendNotificationAction(
+            $meeting->coach,
+            new MeetingCanceledNotification($meeting),
+        );
 
         return redirect()
             ->route('meetings.show', $meeting)
