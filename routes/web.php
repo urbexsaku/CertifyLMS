@@ -25,6 +25,7 @@ use App\Http\Controllers\MockExamController;
 use App\Http\Controllers\MockExamQuestionController;
 use App\Http\Controllers\MockExamSessionController;
 use App\Http\Controllers\MockExamSessionMonitorController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PartController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\QaReplyController;
@@ -207,8 +208,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
         ->name('admin.meeting-packs.archive');
     Route::post('meeting-packs/{plan}/unarchive', [MeetingPackController::class, 'unarchive'])
         ->name('admin.meeting-packs.unarchive');
-  
-  
+
     // プランマスタ管理
     Route::resource('plans', PlanController::class)
         ->names('admin.plans');
@@ -540,6 +540,18 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
             ->name('admin.qa-board.replies.destroy');
     });
 });
+
+// ========================================
+// 通知 — 受講生・コーチ共有
+// ========================================
+Route::middleware(['auth', 'role:student,coach', 'active-learning'])
+    ->prefix('notifications')
+    ->name('notifications.')
+    ->group(function () {
+        Route::get('', [NotificationController::class, 'index'])->name('index');
+        Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
+        Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
+    });
 
 // ============================================================
 // 開発専用: 共通コンポーネントショーケース(APP_ENV=local のみ表示)
