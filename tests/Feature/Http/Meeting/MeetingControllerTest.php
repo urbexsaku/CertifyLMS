@@ -11,8 +11,11 @@ use App\Models\CoachAvailability;
 use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\User;
+use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReservedNotification;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -315,5 +318,210 @@ class MeetingControllerTest extends TestCase
             'type' => MeetingQuotaTransactionType::Refunded->value,
             'amount' => 1,
         ]);
+    }
+
+    public function test_meeting_reserved_notification_is_sent_to_assigned_coach_only(): void
+    {
+        // Arrange
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 3]);
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create([
+            'meeting_url' => 'https://meet.example.com/coach-room',
+        ]);
+        $unrelatedCoach = User::factory()->coach()->create();
+        $certification = Certification::factory()->published()->create();
+        $this->attachCoach($certification, $coach, $admin);
+
+        CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '18:00:00')->create();
+
+        $enrollment = Enrollment::factory()->for($student, 'user')->for($certification)->learning()->create();
+        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0); // 次の月曜 10:00(未来)
+
+        // Act
+        $response = $this->actingAs($student)
+            ->from(route('meetings.create', $enrollment))
+            ->post(route('meetings.store', $enrollment), [
+                'scheduled_at' => $scheduledAt->format('Y-m-d\TH:i:s'),
+                'topic' => '相談したい',
+            ]);
+
+        // Assert
+        $response->assertRedirect();
+
+        $notification = $coach->notifications()
+            ->where('type', MeetingReservedNotification::class)
+            ->first();
+
+        $this->assertNotNull($notification);
+
+        $data = $notification->data;
+
+        $this->assertSame('meeting_reserved', $data['notification_type']);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $student->id,
+            'notifiable_type' => $student->getMorphClass(),
+            'type' => MeetingReservedNotification::class,
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $unrelatedCoach->id,
+            'notifiable_type' => $unrelatedCoach->getMorphClass(),
+            'type' => MeetingReservedNotification::class,
+        ]);
+    }
+
+    public function test_meeting_reserved_email_is_sent_to_assigned_coach(): void
+    {
+        // Arrange
+        Notification::fake();
+
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 3]);
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create([
+            'meeting_url' => 'https://meet.example.com/coach-room',
+        ]);
+        $unrelatedCoach = User::factory()->coach()->create();
+        $certification = Certification::factory()->published()->create();
+        $this->attachCoach($certification, $coach, $admin);
+
+        CoachAvailability::factory()->forCoach($coach)->onDay(1)->timeRange('09:00:00', '18:00:00')->create();
+
+        $enrollment = Enrollment::factory()->for($student, 'user')->for($certification)->learning()->create();
+        $scheduledAt = now()->startOfDay()->next(Carbon::MONDAY)->setTime(10, 0); // 次の月曜 10:00(未来)
+
+        // Act
+        $response = $this->actingAs($student)
+            ->from(route('meetings.create', $enrollment))
+            ->post(route('meetings.store', $enrollment), [
+                'scheduled_at' => $scheduledAt->format('Y-m-d\TH:i:s'),
+                'topic' => '相談したい',
+            ]);
+
+        // Assert
+        $response->assertRedirect();
+
+        Notification::assertSentTo(
+            $coach,
+            MeetingReservedNotification::class,
+            fn ($notification, $channels) => in_array('mail', $channels, true),
+        );
+
+        Notification::assertNotSentTo($student, MeetingReservedNotification::class);
+        Notification::assertNotSentTo($unrelatedCoach, MeetingReservedNotification::class);
+    }
+
+    public function test_meeting_canceled_notification_is_sent_to_coach_when_student_cancels(): void
+    {
+        // Arrange
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 5]);
+        $coach = User::factory()->coach()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => now()->addDays(3)->startOfHour(),
+        ]);
+
+        // Act
+        $response = $this->actingAs($student)->post(route('meetings.cancel', $meeting));
+
+        // Assert
+        $response->assertRedirect();
+
+        $notification = $coach->notifications()
+            ->where('type', MeetingCanceledNotification::class)
+            ->first();
+
+        $this->assertNotNull($notification);
+
+        $data = $notification->data;
+        $this->assertSame('meeting_canceled', $data['notification_type']);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $student->id,
+            'notifiable_type' => $student->getMorphClass(),
+            'type' => MeetingCanceledNotification::class,
+        ]);
+    }
+
+    public function test_meeting_canceled_notification_is_sent_to_student_when_coach_cancels(): void
+    {
+        // Arrange
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 5]);
+        $coach = User::factory()->coach()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => now()->addDays(3)->startOfHour(),
+        ]);
+
+        // Act
+        $response = $this->actingAs($coach)->post(route('meetings.cancel', $meeting));
+
+        // Assert
+        $response->assertRedirect();
+
+        $notification = $student->notifications()
+            ->where('type', MeetingCanceledNotification::class)
+            ->first();
+
+        $this->assertNotNull($notification);
+
+        $data = $notification->data;
+        $this->assertSame('meeting_canceled', $data['notification_type']);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $coach->id,
+            'notifiable_type' => $coach->getMorphClass(),
+            'type' => MeetingCanceledNotification::class,
+        ]);
+    }
+
+    public function test_meeting_canceled_email_is_sent_to_coach_when_student_cancels(): void
+    {
+        // Arrange
+        Notification::fake();
+
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 5]);
+        $coach = User::factory()->coach()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => now()->addDays(3)->startOfHour(),
+        ]);
+
+        // Act
+        $response = $this->actingAs($student)->post(route('meetings.cancel', $meeting));
+
+        // Assert
+        $response->assertRedirect();
+
+        Notification::assertSentTo(
+            $coach,
+            MeetingCanceledNotification::class,
+            fn ($notification, $channels) => in_array('mail', $channels, true),
+        );
+
+        Notification::assertNotSentTo($student, MeetingCanceledNotification::class);
+    }
+
+    public function test_meeting_canceled_email_is_sent_to_student_when_coach_cancels(): void
+    {
+        // Arrange
+        Notification::fake();
+
+        $student = User::factory()->student()->inProgress()->create(['max_meetings' => 5]);
+        $coach = User::factory()->coach()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => now()->addDays(3)->startOfHour(),
+        ]);
+
+        // Act
+        $response = $this->actingAs($coach)->post(route('meetings.cancel', $meeting));
+
+        // Assert
+        $response->assertRedirect();
+
+        Notification::assertSentTo(
+            $student,
+            MeetingCanceledNotification::class,
+            fn ($notification, $channels) => in_array('mail', $channels, true),
+        );
+
+        Notification::assertNotSentTo($coach, MeetingCanceledNotification::class);
     }
 }
