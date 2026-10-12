@@ -27,8 +27,12 @@ final class DestroyAction
                 ->lockForUpdate()
                 ->findOrFail($plan->id);
 
-            if ($plan->status !== PlanStatus::Draft || $plan->users()->exists()) {
-                throw new PlanNotDeletableException;
+            if ($plan->status !== PlanStatus::Draft) {
+                throw PlanNotDeletableException::forInvalidStatus();
+            }
+
+            if ($plan->users()->exists()) {
+                throw PlanNotDeletableException::forStudentsAttached();
             }
 
             $plan->delete();
