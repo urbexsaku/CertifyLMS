@@ -16,7 +16,7 @@ use App\Models\User;
  *
  * - admin: 全資格配下を CRUD 可
  * - coach: 担当資格配下のみ CRUD 可、Draft 状態の view も可
- * - student: Section / Chapter / Part が全て Published 状態のときのみ閲覧可(cascade visibility)
+ * - student: 受講登録済み資格において、Section / Chapter / Part が全て Published 状態のときのみ閲覧可（cascade visibility）
  */
 class SectionPolicy
 {
@@ -41,7 +41,10 @@ class SectionPolicy
 
         return $section->status === ContentStatus::Published
             && $section->chapter->status === ContentStatus::Published
-            && $section->chapter->part->status === ContentStatus::Published;
+            && $section->chapter->part->status === ContentStatus::Published
+            && $auth->enrollments()
+                ->where('certification_id', $section->chapter->part->certification_id)
+                ->exists();
     }
 
     public function create(User $auth, Chapter $chapter): bool

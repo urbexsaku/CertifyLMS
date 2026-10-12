@@ -15,7 +15,7 @@ use App\Models\User;
  *
  * - admin: 全資格配下を CRUD 可
  * - coach: 担当資格(certification_coach_assignments)配下のみ CRUD 可
- * - student: Published 状態のみ閲覧可
+ * - student: 受講登録済み資格の Published 状態の教材のみ閲覧可
  */
 class PartPolicy
 {
@@ -33,7 +33,10 @@ class PartPolicy
         return match ($auth->role) {
             UserRole::Admin => true,
             UserRole::Coach => $this->assignedCoach($auth, $part->certification),
-            default => $part->status === ContentStatus::Published,
+            default => $part->status === ContentStatus::Published
+                && $auth->enrollments()
+                    ->where('certification_id', $part->certification_id)
+                    ->exists(),
         };
     }
 

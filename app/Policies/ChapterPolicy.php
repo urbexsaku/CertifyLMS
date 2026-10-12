@@ -16,7 +16,7 @@ use App\Models\User;
  *
  * - admin: 全資格配下を CRUD 可
  * - coach: 担当資格配下のみ CRUD 可
- * - student: Published 状態のみ閲覧可
+ * - student: 受講登録済み資格の Published 状態の教材のみ閲覧可
  */
 class ChapterPolicy
 {
@@ -34,7 +34,10 @@ class ChapterPolicy
         return match ($auth->role) {
             UserRole::Admin => true,
             UserRole::Coach => $this->assignedCoach($auth, $chapter->part->certification),
-            default => $chapter->status === ContentStatus::Published,
+            default => $chapter->status === ContentStatus::Published
+                && $auth->enrollments()
+                    ->where('certification_id', $chapter->part->certification_id)
+                    ->exists(),
         };
     }
 
