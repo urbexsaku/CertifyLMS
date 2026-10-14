@@ -20,11 +20,14 @@ use App\Models\Enrollment;
 use App\Models\Meeting;
 use App\Models\MeetingMemo;
 use App\Models\User;
+use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReservedNotification;
 use App\Services\CoachMeetingLoadService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
+use App\UseCases\Notification\SendNotificationAction;
 use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -167,6 +170,7 @@ class MeetingController extends Controller
         CoachMeetingLoadService $coachLoadService,
         MeetingQuotaService $quotaService,
         ConsumeQuotaAction $consumeAction,
+        SendNotificationAction $sendNotificationAction,
     ): RedirectResponse {
         $scheduledAt = Carbon::parse($request->validated('scheduled_at'));
         $topic = $request->validated('topic');
@@ -216,6 +220,11 @@ class MeetingController extends Controller
             return $meeting->fresh();
         });
 
+        $sendNotificationAction(
+            $meeting->coach,
+            new MeetingReservedNotification,
+        );
+
         return redirect()
             ->route('meetings.show', $meeting)
             ->with('success', '面談を予約しました。');
@@ -228,6 +237,7 @@ class MeetingController extends Controller
     public function cancel(
         Meeting $meeting,
         RefundQuotaAction $refundAction,
+        SendNotificationAction $sendNotificationAction,
     ): RedirectResponse {
         $this->authorize('cancel', $meeting);
 
@@ -249,6 +259,15 @@ class MeetingController extends Controller
                 'canceled_at' => now(),
             ]);
         });
+
+        $recipient = (string) $actor->id === (string) $meeting->student_id
+            ? $meeting->coach
+            : $meeting->student;
+
+        $sendNotificationAction(
+            $recipient,
+            new MeetingCanceledNotification,
+        );
 
         return redirect()
             ->route('meetings.show', $meeting)

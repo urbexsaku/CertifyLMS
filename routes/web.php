@@ -207,8 +207,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
         ->name('admin.meeting-packs.archive');
     Route::post('meeting-packs/{plan}/unarchive', [MeetingPackController::class, 'unarchive'])
         ->name('admin.meeting-packs.unarchive');
-  
-  
+
     // プランマスタ管理
     Route::resource('plans', PlanController::class)
         ->names('admin.plans');
