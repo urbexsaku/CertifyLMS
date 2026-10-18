@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class UpdateAction
 {
+    /**
+     * @param array{body: string} $validated
+     */
     public function __invoke(QaReply $reply, array $validated): QaReply
     {
         return DB::transaction(function () use ($reply, $validated) {

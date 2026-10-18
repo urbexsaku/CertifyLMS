@@ -14,6 +14,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class StoreAction
 {
+    /**
+     * @param array{body: string} $validated
+     */
     public function __invoke(QaThread $thread, User $auth, array $validated): QaReply
     {
         return DB::transaction(fn () => QaReply::create([
