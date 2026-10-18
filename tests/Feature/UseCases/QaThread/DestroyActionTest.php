@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\UseCases\QaThread;
 
-use App\Exceptions\QaThread\QaThreadHasRepliesException;
+use App\Exceptions\QaThread\QaThreadNotDeletableException;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
@@ -40,7 +40,7 @@ class DestroyActionTest extends TestCase
         $thread = QaThread::factory()->for($student)->create();
         QaReply::factory()->forThread($thread)->create();
 
-        $this->expectException(QaThreadHasRepliesException::class);
+        $this->expectException(QaThreadNotDeletableException::class);
 
         app(DestroyAction::class)($student, $thread);
     }

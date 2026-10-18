@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\UseCases\QaThread;
 
 use App\Enums\UserRole;
-use App\Exceptions\QaThread\QaThreadHasRepliesException;
+use App\Exceptions\QaThread\QaThreadNotDeletableException;
 use App\Models\QaThread;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +17,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class DestroyAction
 {
+    /**
+     * @throws QaThreadNotDeletableException
+     */
     public function __invoke(User $auth, QaThread $thread): void
     {
         DB::transaction(function () use ($auth, $thread) {
@@ -25,7 +28,7 @@ final class DestroyAction
                 ->findOrFail($thread->id);
 
             if ($auth->role === UserRole::Student && $thread->replies()->exists()) {
-                throw new QaThreadHasRepliesException;
+                throw new QaThreadNotDeletableException;
             }
 
             $thread->replies()->delete();
