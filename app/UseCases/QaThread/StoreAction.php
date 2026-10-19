@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\DB;
  */
 final class StoreAction
 {
+    /**
+     * @param array{certification_id: string, title: string, body: string} $validated
+     */
     public function __invoke(User $auth, array $validated): QaThread
     {
         return DB::transaction(fn () => QaThread::create([
