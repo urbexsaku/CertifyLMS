@@ -9,7 +9,10 @@ use App\Models\CertificationCoachAssignment;
 use App\Models\QaReply;
 use App\Models\QaThread;
 use App\Models\User;
+use App\Notifications\QaReplyReceivedNotification;
+use App\UseCases\QaReply\StoreAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -136,5 +139,106 @@ class CrudReplyTest extends TestCase
             ]))
             ->assertRedirect();
         $this->assertDatabaseMissing('qa_replies', ['id' => $adminReply->id]);
+    }
+
+    public function test_replying_to_own_question_does_not_create_notification(): void
+    {
+        $questioner = User::factory()->student()->create();
+        $cert = Certification::factory()->published()->create();
+        $thread = QaThread::factory()->for($cert)->forUser($questioner)->create();
+
+        app(StoreAction::class)($thread, $questioner, ['body' => '回答の本文です。']);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $questioner->id,
+            'type' => QaReplyReceivedNotification::class,
+        ]);
+    }
+
+    public function test_replying_to_another_users_question_creates_notification_for_questioner(): void
+    {
+        $questioner = User::factory()->student()->create();
+        $replier = User::factory()->coach()->create();
+        $admin = User::factory()->admin()->create();
+        $cert = Certification::factory()->published()->create();
+        $thread = QaThread::factory()->for($cert)->forUser($questioner)->create();
+
+        CertificationCoachAssignment::create([
+            'id' => (string) Str::ulid(),
+            'certification_id' => $cert->id,
+            'user_id' => $replier->id,
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        app(StoreAction::class)($thread, $replier, ['body' => '回答の本文です。']);
+
+        $notification = $questioner->notifications()
+            ->where('type', QaReplyReceivedNotification::class)
+            ->first();
+
+        $this->assertNotNull($notification);
+
+        $data = $notification->data;
+
+        $this->assertSame('qa_reply_received', $data['notification_type']);
+        $this->assertSame('qa-board.show', $data['route']);
+        $this->assertSame(
+            ['thread' => $thread->id],
+            $data['route_params']
+        );
+    }
+
+    public function test_replying_to_another_users_question_sends_email_to_questioner(): void
+    {
+        Notification::fake();
+
+        $questioner = User::factory()->student()->create();
+        $replier = User::factory()->coach()->create();
+        $admin = User::factory()->admin()->create();
+        $cert = Certification::factory()->published()->create();
+        $thread = QaThread::factory()->for($cert)->forUser($questioner)->create();
+
+        CertificationCoachAssignment::create([
+            'id' => (string) Str::ulid(),
+            'certification_id' => $cert->id,
+            'user_id' => $replier->id,
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        app(StoreAction::class)($thread, $replier, ['body' => '回答の本文です。']);
+
+        Notification::assertSentTo(
+            $questioner,
+            QaReplyReceivedNotification::class,
+            function (QaReplyReceivedNotification $notification, array $channels): bool {
+                return in_array('mail', $channels, true);
+            }
+        );
+    }
+
+    public function test_replying_to_question_of_inactive_student_does_not_create_notification(): void
+    {
+        $questioner = User::factory()->student()->withdrawn()->create();
+        $replier = User::factory()->coach()->create();
+        $admin = User::factory()->admin()->create();
+        $cert = Certification::factory()->published()->create();
+        $thread = QaThread::factory()->for($cert)->forUser($questioner)->create();
+
+        CertificationCoachAssignment::create([
+            'id' => (string) Str::ulid(),
+            'certification_id' => $cert->id,
+            'user_id' => $replier->id,
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        app(StoreAction::class)($thread, $replier, ['body' => '回答の本文です。']);
+
+        $this->assertDatabaseMissing('notifications', [
+            'notifiable_id' => $questioner->id,
+            'type' => QaReplyReceivedNotification::class,
+        ]);
     }
 }
