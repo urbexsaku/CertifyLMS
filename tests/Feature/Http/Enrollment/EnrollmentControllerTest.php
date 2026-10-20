@@ -6,7 +6,9 @@ namespace Tests\Feature\Http\Enrollment;
 
 use App\Enums\EnrollmentStatus;
 use App\Models\Certification;
+use App\Models\CertificationCoachAssignment;
 use App\Models\Enrollment;
+use App\Models\EnrollmentGoal;
 use App\Models\MockExam;
 use App\Models\MockExamSession;
 use App\Models\User;
@@ -56,6 +58,33 @@ class EnrollmentControllerTest extends TestCase
         $response = $this->actingAs($student)->get(route('enrollments.show', $otherEnrollment));
 
         $response->assertForbidden();
+    }
+
+    public function test_coach_and_admin_cannot_see_goal_operation_buttons(): void
+    {
+        $student = User::factory()->student()->inProgress()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+
+        $admin = User::factory()->admin()->create();
+        $enrollment = Enrollment::factory()->for($student)->create();
+        $goal = EnrollmentGoal::factory()->forEnrollment($enrollment)->create();
+        CertificationCoachAssignment::factory()->create([
+            'certification_id' => $enrollment->certification_id,
+            'user_id' => $coach->id,
+            'assigned_by_user_id' => $admin->id,
+        ]);
+
+        $coachResponse = $this->actingAs($coach)->get(route('enrollments.show', $enrollment));
+        $coachResponse->assertDontSee('達成');
+        $coachResponse->assertDontSee('未達成');
+        $coachResponse->assertDontSee('href="'.route('enrollment-goals.edit', $goal).'"', false);
+        $coachResponse->assertDontSee('action="'.route('enrollment-goals.destroy', $goal).'"', false);
+
+        $adminResponse = $this->actingAs($admin)->get(route('enrollments.show', $enrollment));
+        $adminResponse->assertDontSee('達成');
+        $adminResponse->assertDontSee('未達成');
+        $adminResponse->assertDontSee('href="'.route('enrollment-goals.edit', $goal).'"', false);
+        $adminResponse->assertDontSee('action="'.route('enrollment-goals.destroy', $goal).'"', false);
     }
 
     public function test_store_creates_enrollment_for_published_certification(): void
