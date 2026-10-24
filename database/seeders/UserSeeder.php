@@ -8,6 +8,8 @@ use App\Enums\UserStatus;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 /**
  * 開発用シードユーザー。
@@ -45,6 +47,8 @@ class UserSeeder extends Seeder
     {
         $defaultPassword = Hash::make('password');
         $now = now();
+        $studentAvatarUrl = $this->seedAvatar('student.png', 'avatars/student.png');
+        $coachAvatarUrl = $this->seedAvatar('coach.png', 'avatars/coach.png');
 
         User::factory()
             ->admin()
@@ -66,6 +70,7 @@ class UserSeeder extends Seeder
                 'password' => $defaultPassword,
                 'status' => UserStatus::InProgress->value,
                 'bio' => '5 年以上のコーチング経験。基本情報・応用情報を中心に指導。',
+                'avatar_url' => $coachAvatarUrl,
                 'profile_setup_completed' => true,
                 'email_verified_at' => $now,
                 'meeting_url' => 'https://meet.google.com/coach-taro-room',
@@ -94,6 +99,7 @@ class UserSeeder extends Seeder
                 'password' => $defaultPassword,
                 'status' => UserStatus::InProgress->value,
                 'bio' => '基本情報を 3 ヶ月で合格目標。',
+                'avatar_url' => $studentAvatarUrl,
                 'profile_setup_completed' => true,
                 'email_verified_at' => $now,
             ])
@@ -154,5 +160,33 @@ class UserSeeder extends Seeder
                 'deleted_at' => now()->subDays(fake()->numberBetween(1, 60)),
                 'email' => fn () => 'withdrawn_'.now()->timestamp.'_'.fake()->unique()->randomNumber(5).'@certify-lms.test',
             ]);
+    }
+
+    /**
+     * 固定アカウント用アバター画像を public ディスクに配置し、公開 URL を返す。
+     *
+     * @param string $sourceFile コピー元の画像ファイル名
+     * @param string $destinationPath public ディスク上の保存先パス
+     *
+     * @throws RuntimeException コピー元の画像ファイルが存在しない場合
+     */
+    private function seedAvatar(string $sourceFile, string $destinationPath): string
+    {
+        $sourcePath = database_path(
+            'seeders/assets/avatars/'.$sourceFile
+        );
+
+        if (! is_file($sourcePath)) {
+            throw new RuntimeException(
+                "アバター画像が見つかりません： {$sourcePath}"
+            );
+        }
+
+        Storage::disk('public')->put(
+            $destinationPath,
+            file_get_contents($sourcePath)
+        );
+
+        return Storage::disk('public')->url($destinationPath);
     }
 }
