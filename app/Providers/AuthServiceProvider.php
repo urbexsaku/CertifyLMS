@@ -15,10 +15,13 @@ use App\Models\Invitation;
 use App\Models\LearningHourTarget;
 use App\Models\LearningSession;
 use App\Models\Meeting;
+use App\Models\MeetingPack;
 use App\Models\MockExam;
 use App\Models\MockExamQuestion;
 use App\Models\MockExamSession;
 use App\Models\Part;
+use App\Models\QaReply;
+use App\Models\QaThread;
 use App\Models\QuestionCategory;
 use App\Models\Section;
 use App\Models\SectionImage;
@@ -38,13 +41,17 @@ use App\Policies\EnrollmentPolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\LearningHourTargetPolicy;
 use App\Policies\LearningSessionPolicy;
+use App\Policies\MeetingPackPolicy;
 use App\Policies\MeetingPolicy;
 use App\Policies\MeetingQuotaPolicy;
 use App\Policies\MockExamPolicy;
 use App\Policies\MockExamQuestionPolicy;
 use App\Policies\MockExamSessionPolicy;
+use App\Policies\NotificationPolicy;
 use App\Policies\PartPolicy;
 use App\Policies\PartViewPolicy;
+use App\Policies\QaReplyPolicy;
+use App\Policies\QaThreadPolicy;
 use App\Policies\QuestionCategoryPolicy;
 use App\Policies\SectionImagePolicy;
 use App\Policies\SectionPolicy;
@@ -57,6 +64,7 @@ use App\Policies\SectionViewPolicy;
 use App\Policies\UserPolicy;
 use App\Policies\WeakDrillPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
+use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Gate;
 
 class AuthServiceProvider extends ServiceProvider
@@ -90,6 +98,10 @@ class AuthServiceProvider extends ServiceProvider
         Meeting::class => MeetingPolicy::class,
         CoachAvailability::class => CoachAvailabilityPolicy::class,
         EnrollmentGoal::class => EnrollmentGoalPolicy::class,
+        QaThread::class => QaThreadPolicy::class,
+        QaReply::class => QaReplyPolicy::class,
+        MeetingPack::class => MeetingPackPolicy::class,
+        DatabaseNotification::class => NotificationPolicy::class,
     ];
 
     /**
