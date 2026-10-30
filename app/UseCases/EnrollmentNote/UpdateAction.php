@@ -4,30 +4,25 @@ declare(strict_types=1);
 
 namespace App\UseCases\EnrollmentNote;
 
-use App\Models\MockExam;
-use App\Models\User;
+use App\Models\EnrollmentNote;
 use Illuminate\Support\Facades\DB;
 
 /**
- * 模試マスタを更新するユースケース。`certification_id` は不可変で、`title` / `description` / `order` / `passing_score` のみ更新する。
+ * 管理者・担当コーチによる受講登録メモの更新 Action。
+ *
+ * - 登録済みの受講登録メモの本文を更新する
  */
 final class UpdateAction
 {
     /**
-     * @param array{title: string, description?: ?string, order: int, passing_score: int} $validated
+     * @param array{body: string} $validated
      */
-    public function __invoke(MockExam $mockExam, User $auth, array $validated): MockExam
+    public function __invoke(EnrollmentNote $note, array $validated): EnrollmentNote
     {
-        return DB::transaction(function () use ($mockExam, $auth, $validated) {
-            $mockExam->update([
-                'title' => $validated['title'],
-                'description' => $validated['description'] ?? null,
-                'order' => $validated['order'],
-                'passing_score' => $validated['passing_score'],
-                'updated_by_user_id' => $auth->id,
-            ]);
+        return DB::transaction(function () use ($note, $validated) {
+            $note->update(['body' => $validated['body']]);
 
-            return $mockExam->fresh();
+            return $note->refresh();
         });
     }
 }

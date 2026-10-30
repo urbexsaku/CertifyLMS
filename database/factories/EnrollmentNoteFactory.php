@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
+use App\Models\Enrollment;
+use App\Models\EnrollmentNote;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\EnrollmentNote>
+ * @extends Factory<EnrollmentNote>
  */
 class EnrollmentNoteFactory extends Factory
 {
@@ -17,7 +22,19 @@ class EnrollmentNoteFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'enrollment_id' => Enrollment::factory(),
+            'author_id' => User::factory(),
+            'body' => fake()->realText(120),
         ];
+    }
+
+    public function forEnrollment(Enrollment $enrollment): static
+    {
+        return $this->state(fn () => ['enrollment_id' => $enrollment->id]);
+    }
+
+    public function forAuthor(User $author): static
+    {
+        return $this->state(fn () => ['author_id' => $author->id]);
     }
 }

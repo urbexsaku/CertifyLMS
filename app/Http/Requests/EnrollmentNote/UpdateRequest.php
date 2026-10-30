@@ -1,28 +1,43 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\EnrollmentNote;
 
+use App\Models\EnrollmentNote;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * 管理者・担当コーチによる受講登録メモの更新リクエスト。
+ * 更新対象は本文のみ。
+ */
 class UpdateRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        $note = $this->route('note');
+
+        return $note instanceof EnrollmentNote
+            && ($this->user()?->can('update', $note) ?? false);
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
-            //
+            'body' => ['required', 'string', 'max:2000'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return [
+            'body' => 'メモ本文',
         ];
     }
 }

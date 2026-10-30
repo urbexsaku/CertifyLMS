@@ -4,21 +4,28 @@ declare(strict_types=1);
 
 namespace App\UseCases\EnrollmentNote;
 
+use App\Models\Enrollment;
+use App\Models\EnrollmentNote;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Enrollment 詳細取得 Action。受講生 / コーチ / admin 共通(認可は Controller の Policy で済ませる前提)。
+ * 管理者・担当コーチによる受講登録メモの登録 Action。
  *
- * 詳細ビューで必要な coaches / 修了証 / 最新の状態遷移ログを eager load する。
+ * - 受講登録に紐づくメモを登録する
+ * - ログインユーザーを投稿者として設定する
  */
-final class ShowAction
+final class StoreAction
 {
-    public function __invoke(Enrollment $enrollment): Enrollment
+    /**
+     * @param array{body: string} $validated
+     */
+    public function __invoke(Enrollment $enrollment, User $user, array $validated): EnrollmentNote
     {
-        return $enrollment->loadMissing([
-            'certification.category',
-            'certification.coaches',
-            'certificate',
-            'latestStatusLog.changedBy',
-        ]);
+        return DB::transaction(fn () => EnrollmentNote::create([
+            'enrollment_id' => $enrollment->id,
+            'author_id' => $user->id,
+            'body' => $validated['body'],
+        ]));
     }
 }

@@ -4,39 +4,18 @@ declare(strict_types=1);
 
 namespace App\UseCases\EnrollmentNote;
 
-use App\Enums\EnrollmentStatus;
-use App\Exceptions\Enrollment\EnrollmentInvalidTransitionException;
-use App\Models\Enrollment;
-use App\Services\DefaultEnrollmentService;
+use App\Models\EnrollmentNote;
 use Illuminate\Support\Facades\DB;
 
 /**
- * 受講生による受講解除(SoftDelete) Action。learning 状態の Enrollment のみ削除可。
- * passed / failed は履歴として残すため拒否する。
+ * 管理者・担当コーチによる受講登録メモの削除 Action。
  *
- * 当該 Enrollment が受講生のデフォルト資格だった場合は、他の learning|passed 残存件数で自動振替 / NULL リセット。
+ * - 登録済みの受講登録メモを削除する
  */
 final class DestroyAction
 {
-    public function __construct(
-        private readonly DefaultEnrollmentService $defaultEnrollmentService,
-    ) {}
-
-    /**
-     * @throws EnrollmentInvalidTransitionException
-     */
-    public function __invoke(Enrollment $enrollment): void
+    public function __invoke(EnrollmentNote $note): void
     {
-        if ($enrollment->status !== EnrollmentStatus::Learning) {
-            throw EnrollmentInvalidTransitionException::forDestroy();
-        }
-
-        DB::transaction(function () use ($enrollment) {
-            $user = $enrollment->user;
-
-            $enrollment->delete();
-
-            $this->defaultEnrollmentService->resolveAfterStatusChange($user, $enrollment);
-        });
+        DB::transaction(fn () => $note->delete());
     }
 }

@@ -15,9 +15,9 @@ return new class extends Migration
     {
         Schema::create('enrollment_notes', function (Blueprint $table) {
             $table->ulid('id')->primary();
-            $table->foreignUlid('enrollment_id')
-                ->constrained()
-                ->cascadeOnDelete();
+            $table->foreignUlid('enrollment_id')->constrained()->cascadeOnDelete();
+            $table->foreignUlid('author_id')->constrained('users')->restrictOnDelete();
+            $table->text('body');
             $table->timestamps();
         });
     }
