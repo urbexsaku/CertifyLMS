@@ -18,6 +18,8 @@ return new class extends Migration
             $table->foreignUlid('enrollment_id')
                 ->constrained()
                 ->cascadeOnDelete();
+            $table->foreignUlid('author_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('body');
             $table->timestamps();
         });
     }

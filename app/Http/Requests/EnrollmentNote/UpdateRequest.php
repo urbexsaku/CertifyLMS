@@ -1,28 +1,42 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\EnrollmentNote;
 
+use App\Models\EnrollmentNote;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * 受講生メモ 更新リクエスト。body のみ更新可。
+ */
 class UpdateRequest extends FormRequest
 {
-    /**
-     * Determine if the user is authorized to make this request.
-     */
     public function authorize(): bool
     {
-        return false;
+        $note = $this->route('note');
+
+        return $note instanceof EnrollmentNote
+            && ($this->user()?->can('update', $note) ?? false);
     }
 
     /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, array<int, mixed>>
      */
     public function rules(): array
     {
         return [
-            //
+            'body' => ['required', 'string', 'max:2000'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function attributes(): array
+    {
+        return [
+            'body' => 'メモ本文',
         ];
     }
 }
