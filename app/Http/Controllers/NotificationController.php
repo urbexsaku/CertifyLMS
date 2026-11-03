@@ -95,6 +95,12 @@ class NotificationController extends Controller
                         : 'meetings.index'
                 ),
 
+                'meeting_reminder' => $this->resolveParameterizedRoute(
+                    'meetings.show',
+                    $params,
+                    'meeting'
+                ),
+
                 default => route('notifications.index'),
             };
         } catch (UrlGenerationException $e) {
