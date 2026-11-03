@@ -279,6 +279,26 @@ class User extends Authenticatable
     }
 
     /**
+     * 自身が作成したお知らせ一覧
+     *
+     * @return HasMany<Announcement, $this>
+     */
+    public function createdAnnouncements(): HasMany
+    {
+        return $this->hasMany(Announcement::class, 'created_by_user_id');
+    }
+
+    /**
+     * 配信対象として指定されたお知らせ
+     *
+     * @return HasMany<Announcement, $this>
+     */
+    public function targetedAnnouncements(): HasMany
+    {
+        return $this->hasMany(Announcement::class, 'target_user_id');
+    }
+
+    /**
      * Laravel フレームワーク側のシグナル(`Illuminate\Foundation\Auth\User::sendPasswordResetNotification($token)`)
      * との LSP 整合のため、引数に型宣言を付与しない(親クラスが parameter type なしで宣言しているため)。
      *
