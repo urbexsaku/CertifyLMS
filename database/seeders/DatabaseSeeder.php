@@ -34,6 +34,7 @@ class DatabaseSeeder extends Seeder
             QaReplySeeder::class,
             NotificationSeeder::class,
             EnrollmentNoteSeeder::class,
+            EnrollmentGoalSeeder::class,
         ]);
     }
 }

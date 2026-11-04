@@ -13,6 +13,7 @@ use App\Http\Controllers\ChatRoomController;
 use App\Http\Controllers\ContentSearchController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnrollmentController;
+use App\Http\Controllers\EnrollmentGoalController;
 use App\Http\Controllers\EnrollmentManagementController;
 use App\Http\Controllers\EnrollmentNoteController;
 use App\Http\Controllers\InvitationController;
@@ -43,6 +44,9 @@ use App\Http\Controllers\SectionQuestionController;
 use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
+use App\Http\Controllers\Settings\AvatarController;
+use App\Http\Controllers\Settings\PasswordController;
+use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
@@ -82,6 +86,20 @@ Route::middleware('auth')->group(function () {
 });
 
 // ============================================================
+// 全ロール共通 - プロフィール・アカウント設定
+// ============================================================
+Route::middleware('auth')
+    ->prefix('settings')
+    ->name('settings.')
+    ->group(function () {
+        Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::post('avatar', [AvatarController::class, 'store'])->name('avatar.store');
+        Route::delete('avatar', [AvatarController::class, 'destroy'])->name('avatar.destroy');
+        Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+    });
+
+// ============================================================
 // 受講生専用ルート(受講中ステータスのみ通過、卒業ステータスはロック)
 // ============================================================
 Route::middleware(['auth', 'role:student', 'active-learning'])->group(function () {
@@ -104,6 +122,14 @@ Route::middleware(['auth', 'role:student', 'active-learning'])->group(function (
     // 修了証受領(受講生自己発火、graduated は active-learning でブロックされるため新規受領不可)
     Route::post('enrollments/{enrollment}/receive-certificate', [ReceiveCertificateController::class, 'store'])
         ->name('enrollments.receiveCertificate');
+
+    // 個人学習目標管理
+    Route::post('enrollments/{enrollment}/goals', [EnrollmentGoalController::class, 'store'])->name('enrollments.goals.store');
+    Route::get('enrollment-goals/{goal}/edit', [EnrollmentGoalController::class, 'edit'])->name('enrollment-goals.edit');
+    Route::patch('enrollment-goals/{goal}', [EnrollmentGoalController::class, 'update'])->name('enrollment-goals.update');
+    Route::delete('enrollment-goals/{goal}', [EnrollmentGoalController::class, 'destroy'])->name('enrollment-goals.destroy');
+    Route::post('enrollment-goals/{goal}/achieve', [EnrollmentGoalController::class, 'markAchieved'])->name('enrollment-goals.markAchieved');
+    Route::delete('enrollment-goals/{goal}/achieve', [EnrollmentGoalController::class, 'unmarkAchieved'])->name('enrollment-goals.unmarkAchieved');
 });
 
 // ============================================================

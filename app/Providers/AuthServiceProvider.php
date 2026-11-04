@@ -11,6 +11,7 @@ use App\Models\ChatRoom;
 use App\Models\CoachAvailability;
 use App\Models\Enrollment;
 use App\Models\EnrollmentNote;
+use App\Models\EnrollmentGoal;
 use App\Models\Invitation;
 use App\Models\LearningHourTarget;
 use App\Models\LearningSession;
@@ -37,6 +38,7 @@ use App\Policies\ChapterViewPolicy;
 use App\Policies\ChatRoomPolicy;
 use App\Policies\CoachAvailabilityPolicy;
 use App\Policies\EnrollmentNotePolicy;
+use App\Policies\EnrollmentGoalPolicy;
 use App\Policies\EnrollmentPolicy;
 use App\Policies\InvitationPolicy;
 use App\Policies\LearningHourTargetPolicy;
@@ -97,6 +99,7 @@ class AuthServiceProvider extends ServiceProvider
         SectionQuestionAttempt::class => SectionQuestionAttemptPolicy::class,
         Meeting::class => MeetingPolicy::class,
         CoachAvailability::class => CoachAvailabilityPolicy::class,
+        EnrollmentGoal::class => EnrollmentGoalPolicy::class,
         QaThread::class => QaThreadPolicy::class,
         QaReply::class => QaReplyPolicy::class,
         MeetingPack::class => MeetingPackPolicy::class,
