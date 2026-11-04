@@ -8,11 +8,13 @@ use App\Enums\EnrollmentStatus;
 use App\Models\Certification;
 use App\Models\CertificationCoachAssignment;
 use App\Models\Enrollment;
+use App\Models\EnrollmentNote;
 use App\Models\EnrollmentGoal;
 use App\Models\MockExam;
 use App\Models\MockExamSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -60,6 +62,145 @@ class EnrollmentControllerTest extends TestCase
         $response->assertForbidden();
     }
 
+    public function test_show_student_cannot_see_notes(): void
+    {
+        // Arrange
+        $student = User::factory()->student()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+
+        $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
+        $note = EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($student)->create(['body' => 'メモ本文']);
+
+        // Act
+        $response = $this->actingAs($student)->get(route('enrollments.show', $enrollment));
+
+        // Assert
+        $response->assertDontSee('メモ本文');
+        $response->assertDontSee('href="'.route('enrollment-notes.edit', $note).'"', false);
+        $response->assertDontSee('action="'.route('enrollment-notes.destroy', $note).'"', false);
+    }
+
+    public function test_show_assigned_coach_can_see_notes(): void
+    {
+        // Arrange
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $otherCoach = User::factory()->coach()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+
+        $certification->coaches()->attach($coach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $certification->coaches()->attach($otherCoach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
+        $note = EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($coach)->create(['body' => '本人のメモ']);
+        $otherCoachNote = EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($otherCoach)->create(['body' => '他のコーチメモ']);
+
+        // Act
+        $response = $this->actingAs($coach)->get(route('enrollments.show', $enrollment));
+
+        // Assert
+        $response->assertSee('本人のメモ');
+        $response->assertSee('href="'.route('enrollment-notes.edit', $note).'"', false);
+        $response->assertSee('action="'.route('enrollment-notes.destroy', $note).'"', false);
+
+        $response->assertSee('他のコーチメモ');
+        $response->assertDontSee('href="'.route('enrollment-notes.edit', $otherCoachNote).'"', false);
+        $response->assertDontSee('action="'.route('enrollment-notes.destroy', $otherCoachNote).'"', false);
+    }
+
+    public function test_show_admin_can_see_notes(): void
+    {
+        // Arrange
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+
+        $certification->coaches()->attach($coach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
+        $note = EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($coach)->create(['body' => 'メモ本文']);
+
+        // Act
+        $response = $this->actingAs($admin)->get(route('enrollments.show', $enrollment));
+
+        // Assert
+        $response->assertSee('メモ本文');
+        $response->assertSee('href="'.route('enrollment-notes.edit', $note).'"', false);
+        $response->assertSee('action="'.route('enrollment-notes.destroy', $note).'"', false);
+    }
+
+    public function test_show_deleted_enrollment_notes_are_not_displayed(): void
+    {
+        // Arrange
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+
+        $certification->coaches()->attach($coach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $enrollment = Enrollment::factory()->for($certification)->learning()->create();
+        $note = EnrollmentNote::factory()->forEnrollment($enrollment)->create(['body' => '削除済みEnrollmentのメモ']);
+        $enrollment->delete();
+
+        // Act
+        $response = $this->actingAs($coach)->get(route('enrollments.show', $enrollment));
+
+        // Assert
+        $response->assertOk();
+        $response->assertDontSee($note->body);
+    }
+
+    public function test_show_assigned_coach_sees_notes_in_newest_first_order(): void
+    {
+        // Arrange
+        $admin = User::factory()->admin()->create();
+        $coach = User::factory()->coach()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $certification = Certification::factory()->published()->create();
+
+        $certification->coaches()->attach($coach->id, [
+            'id' => (string) Str::ulid(),
+            'assigned_by_user_id' => $admin->id,
+            'assigned_at' => now(),
+        ]);
+
+        $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
+        EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($coach)->create([
+            'body' => '古いメモ本文',
+            'created_at' => now()->subHours(5),
+        ]);
+        EnrollmentNote::factory()->forEnrollment($enrollment)->forAuthor($coach)->create([
+            'body' => '新しいメモ本文',
+            'created_at' => now()->subMinutes(5),
+        ]);
+
+        // Act
+        $response = $this->actingAs($coach)->get(route('enrollments.show', $enrollment));
+
+        // Assert
+        $response->assertSeeInOrder([
+            '新しいメモ本文',
+            '古いメモ本文',
+        ]);
     public function test_coach_and_admin_cannot_see_goal_operation_buttons(): void
     {
         $student = User::factory()->student()->inProgress()->create();
