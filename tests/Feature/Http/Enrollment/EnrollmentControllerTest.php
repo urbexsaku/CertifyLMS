@@ -8,8 +8,8 @@ use App\Enums\EnrollmentStatus;
 use App\Models\Certification;
 use App\Models\CertificationCoachAssignment;
 use App\Models\Enrollment;
-use App\Models\EnrollmentNote;
 use App\Models\EnrollmentGoal;
+use App\Models\EnrollmentNote;
 use App\Models\MockExam;
 use App\Models\MockExamSession;
 use App\Models\User;
@@ -201,6 +201,8 @@ class EnrollmentControllerTest extends TestCase
             '新しいメモ本文',
             '古いメモ本文',
         ]);
+    }
+
     public function test_coach_and_admin_cannot_see_goal_operation_buttons(): void
     {
         $student = User::factory()->student()->inProgress()->create();
