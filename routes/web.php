@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
 use App\Http\Controllers\CertificationCatalogController;
@@ -262,6 +263,11 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
         ->name('admin.plans.archive');
     Route::post('plans/{plan}/unarchive', [PlanController::class, 'unarchive'])
         ->name('admin.plans.unarchive');
+
+    // お知らせ配信管理
+    Route::resource('announcements', AnnouncementController::class)
+        ->only(['index', 'create', 'store', 'show'])
+        ->names('admin.announcements');
 });
 
 // ============================================================
@@ -591,6 +597,7 @@ Route::middleware(['auth', 'role:admin'])->prefix('admin')->group(function () {
 Route::middleware('auth')->prefix('notifications')->name('notifications.')
     ->group(function () {
         Route::get('', [NotificationController::class, 'index'])->name('index');
+        Route::get('{notification}', [NotificationController::class, 'show'])->name('show');
         Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
         Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
     });

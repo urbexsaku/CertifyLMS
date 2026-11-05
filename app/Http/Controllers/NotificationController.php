@@ -15,12 +15,13 @@ use Illuminate\Routing\Exceptions\UrlGenerationException;
 use Illuminate\View\View;
 
 /**
- * 通知基盤 Controller。 student / coach 共通の閲覧導線(index / markAsRead / markAllAsRead)を提供する。
+ * 認証ユーザー向けの通知画面 Controller。
  *
- * - student: 自分宛ての通知一覧 / 通知の既読化 / 全通知の既読化
- * - coach: 自分宛ての通知一覧 / 通知の既読化 / 全通知の既読化
+ * - 通知一覧・詳細表示
+ * - 通知の既読化・全通知の一括既読化
  *
- * 表示要素のロール差は Blade の `@can` / `auth()->user()->role` 判定で出し分ける。
+ * 通知の閲覧・既読化は NotificationPolicy で認可し、
+ * 通知の取得範囲は Action 側で認証ユーザー本人に限定する。
  */
 class NotificationController extends Controller
 {
@@ -42,6 +43,19 @@ class NotificationController extends Controller
             'notifications' => $notifications,
             'unreadCount' => $unreadCount,
             'tab' => $tab,
+        ]);
+    }
+
+    public function show(Request $request, DatabaseNotification $notification): View
+    {
+        $this->authorize('view', $notification);
+
+        $notification = $request->user()
+            ->notifications()
+            ->findOrFail($notification->id);
+
+        return view('notifications.show', [
+            'notification' => $notification,
         ]);
     }
 
@@ -93,6 +107,11 @@ class NotificationController extends Controller
                     $request->user()->role === UserRole::Coach
                         ? 'coach.meetings.index'
                         : 'meetings.index'
+                ),
+
+                'admin_announcement' => route(
+                    'notifications.show',
+                    ['notification' => $notification->id]
                 ),
 
                 default => route('notifications.index'),
