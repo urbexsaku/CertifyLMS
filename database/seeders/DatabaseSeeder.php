@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             MentoringSeeder::class,
             ContentSeeder::class,
             LearningSeeder::class,
+            AiChatConversationSeeder::class,
             QuizAnsweringSeeder::class,
             MockExamSeeder::class,
             ChatSeeder::class,
