@@ -14,8 +14,9 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
+use App\Services\CertificatePdfGeneratorService;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * 卒業生向けの修了証 + 過去 Enrollment 補完シーダー。
@@ -60,8 +61,19 @@ final class CertificateSeeder extends Seeder
             return;
         }
 
+        $certificationsByName = $publishedCertifications->keyBy('name');
+
+        $certificationNames = [
+            '基本情報技術者試験',
+            '日商簿記 2 級',
+            'TOEIC L&R 800 点コース',
+        ];
+
         foreach ($graduatedStudents as $i => $student) {
-            $certification = $publishedCertifications->get($i % $publishedCertifications->count());
+            $certification = $certificationsByName->get(
+                $certificationNames[$i % count($certificationNames)]
+            );
+
             if ($certification === null) {
                 continue;
             }
@@ -115,18 +127,24 @@ final class CertificateSeeder extends Seeder
     }
 
     /**
-     * Certificate を 1 件発行する。
+     * Certificate を 1 件発行し、PDF 実体も生成する。
      */
     private function issueCertificateForEnrollment(Enrollment $enrollment): void
     {
-        $issuedAt = $enrollment->passed_at ?? now();
+        $certificate = Certificate::query()
+            ->where('enrollment_id', $enrollment->id)
+            ->first();
 
-        $certificate = Certificate::factory()
-            ->forEnrollment($enrollment)
-            ->state([
-                'pdf_path' => 'certificates/'.Str::ulid().'.pdf',
-                'issued_at' => $issuedAt,
-            ])
-            ->create();
+        if ($certificate === null) {
+            $certificate = Certificate::factory()
+                ->forEnrollment($enrollment)
+                ->create([
+                    'issued_at' => $enrollment->passed_at ?? now(),
+                ]);
+        }
+
+        if (! Storage::disk('private')->exists($certificate->pdf_path)) {
+            app(CertificatePdfGeneratorService::class)->generate($certificate);
+        }
     }
 }
