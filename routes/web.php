@@ -46,6 +46,7 @@ use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
 use App\Http\Controllers\Settings\AvatarController;
+use App\Http\Controllers\Settings\GoogleCalendarController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
@@ -600,6 +601,23 @@ Route::middleware('auth')->prefix('notifications')->name('notifications.')
         Route::get('{notification}', [NotificationController::class, 'show'])->name('show');
         Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
         Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
+    });
+
+// ============================================================
+// コーチ専用ルート — Google Calendar連携
+// ============================================================
+Route::middleware(['auth', 'role:coach'])
+    ->prefix('settings')
+    ->name('settings.')
+    ->group(function () {
+        Route::get('google-calendar/connect', [GoogleCalendarController::class, 'redirect'])
+            ->name('google-calendar.redirect');
+
+        Route::get('google-calendar/callback', [GoogleCalendarController::class, 'callback'])
+            ->name('google-calendar.callback');
+
+        Route::delete('google-calendar', [GoogleCalendarController::class, 'destroy'])
+            ->name('google-calendar.destroy');
     });
 
 // ============================================================
