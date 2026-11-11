@@ -23,6 +23,12 @@ class NotificationPolicy
         return true;
     }
 
+    public function view(User $user, DatabaseNotification $notification): bool
+    {
+        return $notification->notifiable_type === $user->getMorphClass()
+            && $notification->notifiable_id === $user->getKey();
+    }
+
     public function markAsRead(User $user, DatabaseNotification $notification): bool
     {
         return $notification->notifiable_type === $user->getMorphClass()
