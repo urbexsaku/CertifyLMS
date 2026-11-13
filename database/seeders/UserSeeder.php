@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Enums\UserStatus;
+use App\Models\GoogleCredential;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -62,7 +63,7 @@ class UserSeeder extends Seeder
             ])
             ->create();
 
-        User::factory()
+        $linkedCoach = User::factory()
             ->coach()
             ->state([
                 'name' => 'コーチ太郎',
@@ -118,6 +119,11 @@ class UserSeeder extends Seeder
                 'profile_setup_completed' => true,
                 'email_verified_at' => $now,
             ])
+            ->create();
+
+        // Google 連携済み状態の初期データを作成
+        GoogleCredential::factory()
+            ->for($linkedCoach)
             ->create();
     }
 
