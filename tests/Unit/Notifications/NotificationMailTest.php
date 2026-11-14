@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Notifications;
 
+use App\Enums\MeetingReminderWindow;
+use App\Models\Meeting;
 use App\Models\User;
 use App\Notifications\ChatMessageReceivedNotification;
 use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReminderNotification;
 use App\Notifications\MeetingReservedNotification;
 use App\Notifications\QaReplyReceivedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,5 +96,53 @@ class NotificationMailTest extends TestCase
 
         $this->assertSame(route('coach.meetings.index'), $coachMail->actionUrl);
         $this->assertSame(route('meetings.index'), $studentMail->actionUrl);
+    }
+
+    public function test_meeting_reminder_email_includes_meeting_url_when_snapshot_exists(): void
+    {
+        // Arrange
+        $coach = User::factory()->coach()->inProgress()->create([
+            'meeting_url' => 'https://meet.example.com/coach-room',
+        ]);
+        $student = User::factory()->student()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create();
+        $notification = new MeetingReminderNotification($meeting, MeetingReminderWindow::Eve);
+
+        // Act
+        $coachMail = $notification->toMail($coach);
+        $studentMail = $notification->toMail($student);
+
+        // Assert
+        $this->assertInstanceOf(MailMessage::class, $coachMail);
+        $this->assertSame('【Certify LMS】'.MeetingReminderWindow::Eve->label(), $coachMail->subject);
+        $this->assertSame($meeting->meeting_url_snapshot, $coachMail->actionUrl);
+
+        $this->assertInstanceOf(MailMessage::class, $studentMail);
+        $this->assertSame('【Certify LMS】'.MeetingReminderWindow::Eve->label(), $studentMail->subject);
+        $this->assertSame($meeting->meeting_url_snapshot, $studentMail->actionUrl);
+    }
+
+    public function test_meeting_reminder_email_does_not_include_meeting_url_when_snapshot_is_null(): void
+    {
+        // Arrange
+        $coach = User::factory()->coach()->inProgress()->create();
+        $student = User::factory()->student()->inProgress()->create();
+
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create([
+            'meeting_url_snapshot' => null,
+        ]);
+
+        $notification = new MeetingReminderNotification($meeting, MeetingReminderWindow::Eve);
+
+        // Act
+        $coachMail = $notification->toMail($coach);
+        $studentMail = $notification->toMail($student);
+
+        // Assert
+        $this->assertNull($coachMail->actionText);
+        $this->assertNull($coachMail->actionUrl);
+
+        $this->assertNull($studentMail->actionText);
+        $this->assertNull($studentMail->actionUrl);
     }
 }

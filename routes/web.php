@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
+use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\CertificationCatalogController;
 use App\Http\Controllers\CertificationCategoryController;
 use App\Http\Controllers\CertificationCoachAssignmentController;
@@ -47,6 +48,7 @@ use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
 use App\Http\Controllers\Settings\AvatarController;
+use App\Http\Controllers\Settings\GoogleCalendarController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
@@ -86,6 +88,10 @@ Route::middleware('auth')->group(function () {
     Route::get('enrollments/{enrollment}', [EnrollmentController::class, 'show'])
         ->withTrashed()
         ->name('enrollments.show');
+
+    // 修了証PDFダウンロード(3 ロール共有、認可は CertificatePolicy で判定)
+    Route::get('certificates/{certificate}/download', [CertificateController::class, 'download'])
+        ->name('certificates.download');
 });
 
 // ============================================================
@@ -609,6 +615,23 @@ Route::middleware('auth')->prefix('notifications')->name('notifications.')
         Route::get('{notification}', [NotificationController::class, 'show'])->name('show');
         Route::post('{notification}/read', [NotificationController::class, 'markAsRead'])->name('markAsRead');
         Route::post('read-all', [NotificationController::class, 'markAllAsRead'])->name('markAllAsRead');
+    });
+
+// ============================================================
+// コーチ専用ルート — Google Calendar連携
+// ============================================================
+Route::middleware(['auth', 'role:coach'])
+    ->prefix('settings')
+    ->name('settings.')
+    ->group(function () {
+        Route::get('google-calendar/connect', [GoogleCalendarController::class, 'redirect'])
+            ->name('google-calendar.redirect');
+
+        Route::get('google-calendar/callback', [GoogleCalendarController::class, 'callback'])
+            ->name('google-calendar.callback');
+
+        Route::delete('google-calendar', [GoogleCalendarController::class, 'destroy'])
+            ->name('google-calendar.destroy');
     });
 
 // ============================================================
