@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Enums\MeetingQuotaTransactionType;
 use App\Models\MeetingQuotaTransaction;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 

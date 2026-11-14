@@ -143,4 +143,52 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません。
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — コーチの Google Calendar 連携に使用します。Google Cloud Console で OAuth クライアントを作成し、Google Calendar API を有効化してください。コールバック URL（`http://localhost:8000/settings/google-calendar/callback`）を登録し、OAuth 同意画面をテストモードにする場合は、連携するアカウントをテストユーザーに追加してください。
 
+### Stripe連携（追加面談購入）
+
+追加面談の購入機能を確認する場合は、Stripeのテスト環境を使用します。
+
+#### 1. Stripeの環境変数設定
+
+`.env` にStripeのテスト用キーを設定します。
+
+```dotenv
+STRIPE_KEY=pk_test_xxxxxxxxx
+STRIPE_SECRET=sk_test_xxxxxxxxx
+STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxx
+```
+
+各キーはStripe Dashboardのテスト環境から取得してください。
+
+#### 2. Webhookの設定
+
+ローカル環境でStripeのWebhookを受信するため、Stripe CLIを使用してWebhookイベントを転送します。
+
+```bash
+stripe login
+
+stripe listen --forward-to http://localhost:8000/webhooks/stripe
+```
+
+コマンド実行時に表示されるWebhook署名シークレット（`whsec_...`）を `.env` の `STRIPE_WEBHOOK_SECRET` に設定してください。
+
+アプリケーションでは、以下のWebhookイベントを処理します。
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+
+#### 3. テスト用カード情報
+
+Stripe Checkoutのテスト決済では、以下のカード情報を使用できます。
+
+| 項目 | 入力値 |
+|---|---|
+| カード番号 | `4242 4242 4242 4242` |
+| 有効期限 | 将来の任意の年月 |
+| セキュリティコード | 任意の3桁 |
+| 郵便番号 | 任意の値 |
+
+※ Stripeが提供するテスト用カード番号です。実際の請求は発生しません。
+
 新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。

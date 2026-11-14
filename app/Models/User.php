@@ -300,6 +300,16 @@ class User extends Authenticatable
     }
 
     /**
+     * 自身が購入した履歴
+     *
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
      * Google Calendar連携情報。
      *
      * @return HasOne<GoogleCredential, $this>
