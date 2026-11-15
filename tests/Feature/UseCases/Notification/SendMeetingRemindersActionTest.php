@@ -93,7 +93,7 @@ class SendMeetingRemindersActionTest extends TestCase
         $coach = User::factory()->coach()->create();
         $student = User::factory()->student()->inProgress()->create();
         $canceledMeeting = Meeting::factory()->canceled()->forCoach($coach)->forStudent($student)->create([
-            'scheduled_at' => '2026-11-08 17:00:00',
+            'scheduled_at' => '2026-11-08 18:00:00',
         ]);
         $completedTomorrowMeeting = Meeting::factory()->completed()->forCoach($coach)->forStudent($student)->create([
             'scheduled_at' => '2026-11-08 17:00:00',
@@ -168,11 +168,13 @@ class SendMeetingRemindersActionTest extends TestCase
         // Arrange
         $coach = User::factory()->coach()->create();
         $student = User::factory()->student()->inProgress()->create();
+
         $canceledMeeting = Meeting::factory()->canceled()->forCoach($coach)->forStudent($student)->create([
             'scheduled_at' => '2026-11-07 18:00:00',
         ]);
-        $completedTomorrowMeeting = Meeting::factory()->completed()->forCoach($coach)->forStudent($student)->create([
-            'scheduled_at' => '2026-11-07 18:00:00',
+
+        $completedMeeting = Meeting::factory()->completed()->forCoach($coach)->forStudent($student)->create([
+            'scheduled_at' => '2026-11-07 18:01:00',
         ]);
 
         // Act
@@ -180,7 +182,7 @@ class SendMeetingRemindersActionTest extends TestCase
 
         // Assert
         foreach ([$student, $coach] as $user) {
-            foreach ([$canceledMeeting, $completedTomorrowMeeting] as $meeting) {
+            foreach ([$canceledMeeting, $completedMeeting] as $meeting) {
                 $this->assertDatabaseMissing('notifications', [
                     'notifiable_id' => $user->id,
                     'notifiable_type' => $user->getMorphClass(),
@@ -203,13 +205,13 @@ class SendMeetingRemindersActionTest extends TestCase
             User::factory()->coach()->invited()->create(),
         ];
 
-        foreach ($ineligibleUsers as $user) {
+        foreach ($ineligibleUsers as $index => $user) {
             Meeting::factory()
                 ->reserved()
                 ->forCoach($user->role === UserRole::Coach ? $user : $coach)
                 ->forStudent($user->role === UserRole::Student ? $user : User::factory()->student()->inProgress()->create())
                 ->create([
-                    'scheduled_at' => '2026-11-08 17:00:00',
+                    'scheduled_at' => now()->addDay()->setTime(17, 0)->addMinutes($index),
                 ]);
         }
 
@@ -236,7 +238,6 @@ class SendMeetingRemindersActionTest extends TestCase
             'scheduled_at' => '2026-11-08 17:00:00',
         ]);
 
-        // Act
         // Act
         $action = app(SendMeetingRemindersAction::class);
 
