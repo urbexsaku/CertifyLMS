@@ -17,7 +17,12 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Google OAuth 認可 URL を生成する。
+ * Google Calendar API との連携処理を行うサービス。
+ *
+ * - OAuth 認証 URL の生成と認証コードのトークン交換
+ * - コーチの Google Calendar 認証情報を使用した API クライアントの生成
+ * - 既存予定の取得と面談イベントの登録・削除
+ * - アクセストークンの更新と OAuth アクセス権の失効
  *
  * 要求する権限:
  * - Calendar FreeBusy: コーチの既存予定と面談候補枠の重複判定

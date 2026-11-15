@@ -21,6 +21,17 @@ final class CompletePaymentAction
         private readonly GrantPurchasedQuotaAction $grantPurchasedQuotaAction,
     ) {}
 
+    /**
+     * Stripeの決済完了情報をPaymentに反映し、購入した面談回数を付与する。
+     *
+     * @param string $paymentId Payment ID
+     * @param string $sessionId Stripe Checkout Session ID
+     * @param string|null $paymentIntentId Stripe Payment Intent ID
+     * @param int|null $amountTotal 決済金額
+     * @param string|null $currency 決済通貨
+     *
+     * @return Payment 更新されたPayment
+     */
     public function __invoke(
         string $paymentId,
         string $sessionId,

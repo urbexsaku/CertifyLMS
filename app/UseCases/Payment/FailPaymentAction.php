@@ -14,6 +14,12 @@ use RuntimeException;
  */
 final class FailPaymentAction
 {
+    /**
+     * Stripeの決済失敗または有効期限切れをPaymentに反映する。
+     *
+     * @param string $paymentId Payment ID
+     * @param string $sessionId Stripe Checkout Session ID
+     */
     public function __invoke(
         string $paymentId,
         string $sessionId,
