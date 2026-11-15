@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Models\Announcement;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 
-class AdminAnnouncementNotification extends Notification
+/**
+ * 管理者お知らせ通知。
+ *
+ * 管理者が配信したお知らせを対象受講生へ
+ * アプリ内通知およびメール通知で送信する。
+ */
+class AdminAnnouncementNotification extends BaseNotification
 {
-    use Queueable;
-
     public function __construct(
         private readonly Announcement $announcement,
     ) {}

@@ -6,9 +6,7 @@ namespace App\Notifications;
 
 use App\Enums\MeetingReminderWindow;
 use App\Models\Meeting;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 
 /**
  * 面談リマインダー通知。
@@ -16,10 +14,8 @@ use Illuminate\Notifications\Notification;
  * 面談前日または1時間前に、受講生と担当コーチへ
  * アプリ内通知およびメール通知を送信する。
  */
-class MeetingReminderNotification extends Notification
+class MeetingReminderNotification extends BaseNotification
 {
-    use Queueable;
-
     public function __construct(
         private readonly Meeting $meeting,
         private readonly MeetingReminderWindow $window,
