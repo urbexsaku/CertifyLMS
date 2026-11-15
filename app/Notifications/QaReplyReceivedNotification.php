@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Notifications;
 
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 
 /**
  * Q&A返信通知。
@@ -14,10 +12,8 @@ use Illuminate\Notifications\Notification;
  * 自分が投稿したQ&Aに回答があったユーザーに、
  * アプリ内通知およびメール通知を送信する。
  */
-class QaReplyReceivedNotification extends Notification
+class QaReplyReceivedNotification extends BaseNotification
 {
-    use Queueable;
-
     public function __construct(
         private readonly int|string $targetId,
     ) {}

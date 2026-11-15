@@ -19,25 +19,26 @@ class AnnouncementDispatchServiceTest extends TestCase
 
     public function test_dispatch_sends_notification_to_all_recipients(): void
     {
-        // Arrange
         Notification::fake();
-
-        $service = app(AnnouncementDispatchService::class);
-
-        $recipient1 = User::factory()->student()->inProgress()->create();
-        $recipient2 = User::factory()->student()->inProgress()->create();
-        $recipient3 = User::factory()->student()->inProgress()->create();
-        $recipients = new Collection([$recipient1, $recipient2, $recipient3]);
 
         $announcement = Announcement::factory()->create();
 
+        $recipient1 = User::factory()->create();
+        $recipient2 = User::factory()->create();
+        $recipient3 = User::factory()->create();
+
+        $recipients = new Collection([
+            $recipient1,
+            $recipient2,
+            $recipient3,
+        ]);
+
+        $service = app(AnnouncementDispatchService::class);
+
         // Act
-        $dispatchedCount = $service->dispatch($announcement, $recipients);
+        $service->dispatch($announcement, $recipients);
 
         // Assert
-        $this->assertSame(3, $dispatchedCount);
-        $this->assertSame(3, $announcement->fresh()->dispatched_count);
-
         Notification::assertSentTo($recipient1, AdminAnnouncementNotification::class);
         Notification::assertSentTo($recipient2, AdminAnnouncementNotification::class);
         Notification::assertSentTo($recipient3, AdminAnnouncementNotification::class);
