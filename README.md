@@ -112,8 +112,10 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 ## テスト
 
 ```bash
-sail artisan test                  # 全テスト実行
-sail artisan test --filter=Xxx    # クラス名・メソッド名で絞り込み
+sail artisan test                                      # 全テスト実行
+sail artisan test --filter=Xxx                         # クラス名・メソッド名で絞り込み
+sail artisan test --group=external-api                 # 外部 API 連携テストのみ実行
+sail artisan test --exclude-group=external-api         # 外部 API 連携テストを除外して実行
 ```
 
 ## コード整形

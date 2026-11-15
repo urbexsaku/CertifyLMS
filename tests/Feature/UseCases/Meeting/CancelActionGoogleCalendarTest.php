@@ -14,9 +14,11 @@ use App\UseCases\Meeting\CancelAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Mockery;
+use PHPUnit\Framework\Attributes\Group;
 use RuntimeException;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class CancelActionGoogleCalendarTest extends TestCase
 {
     use RefreshDatabase;

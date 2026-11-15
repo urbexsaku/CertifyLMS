@@ -17,14 +17,170 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Group;
 use RuntimeException;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class GoogleCalendarServiceTest extends TestCase
 {
     use RefreshDatabase;
 
     private array $history = [];
+
+    public function test_returns_busy_periods_from_primary_calendar(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $service = $this->createService([
+            new Response(
+                200,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'kind' => 'calendar#freeBusy',
+                    'calendars' => [
+                        'primary' => [
+                            'busy' => [
+                                [
+                                    'start' => '2026-11-13T10:00:00+09:00',
+                                    'end' => '2026-11-13T11:00:00+09:00',
+                                ],
+                            ],
+                        ],
+                    ],
+                ], JSON_THROW_ON_ERROR)
+            ),
+        ]);
+
+        $periods = $service->busyPeriods(
+            $coach,
+            Carbon::parse('2026-11-13 09:00:00'),
+            Carbon::parse('2026-11-13 18:00:00'),
+        );
+
+        $this->assertCount(1, $periods);
+        $this->assertSame(
+            '2026-11-13 10:00:00',
+            $periods->first()['start']->format('Y-m-d H:i:s')
+        );
+        $this->assertSame(
+            '2026-11-13 11:00:00',
+            $periods->first()['end']->format('Y-m-d H:i:s')
+        );
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString('/freeBusy', (string) $this->history[0]['request']->getUri());
+    }
+
+    public function test_creates_meeting_event_with_valid_token(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'scheduled_at' => Carbon::parse('2026-11-16 10:00:00'),
+                'topic' => '面談テスト',
+                'meeting_url_snapshot' => 'https://meet.example.com/test',
+            ]);
+
+        $service = $this->createService([
+            $this->createdEventResponse(),
+        ]);
+
+        $eventId = $service->createMeetingEvent($meeting);
+
+        $this->assertSame('created-event-123', $eventId);
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => 'created-event-123',
+        ]);
+
+        $requestBody = json_decode(
+            (string) $this->history[0]['request']->getBody(),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertSame('Certify LMS 面談', $requestBody['summary']);
+        $this->assertStringContainsString('面談テスト', $requestBody['description']);
+        $this->assertStringContainsString(
+            'https://meet.example.com/test',
+            $requestBody['description']
+        );
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString('/events', (string) $this->history[0]['request']->getUri());
+    }
+
+    public function test_deletes_meeting_event_with_valid_token(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'google_calendar_event_id' => 'google-event-123',
+            ]);
+
+        $service = $this->createService([
+            new Response(204),
+        ]);
+
+        $service->deleteMeetingEvent($meeting);
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => null,
+        ]);
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString('/events/google-event-123', (string) $this->history[0]['request']->getUri());
+    }
+
+    public function test_throws_exception_when_deleting_already_deleted_event(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'google_calendar_event_id' => 'deleted-google-event-123',
+            ]);
+
+        $service = $this->createService([
+            new Response(
+                404,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'error' => [
+                        'code' => 404,
+                        'message' => 'Not Found',
+                    ],
+                ], JSON_THROW_ON_ERROR)
+            ),
+        ]);
+
+        try {
+            $service->deleteMeetingEvent($meeting);
+
+            $this->fail('削除済みイベントの削除時に例外が発生しませんでした。');
+        } catch (GoogleServiceException $exception) {
+            $this->assertSame(404, $exception->getCode());
+        }
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => 'deleted-google-event-123',
+        ]);
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString(
+            '/events/deleted-google-event-123',
+            (string) $this->history[0]['request']->getUri()
+        );
+    }
 
     public function test_refreshes_access_token_before_fetching_busy_periods(): void
     {
@@ -375,6 +531,19 @@ class GoogleCalendarServiceTest extends TestCase
 
         // 初回APIとトークン更新だけで終了し、APIを再試行しない。
         $this->assertCount(2, $this->history);
+    }
+
+    public function test_unmocked_google_calendar_request_fails_without_network_access(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $this->expectException(\OutOfBoundsException::class);
+
+        app(GoogleCalendarService::class)->busyPeriods(
+            $coach,
+            Carbon::parse('2026-11-13 09:00:00'),
+            Carbon::parse('2026-11-13 18:00:00'),
+        );
     }
 
     private function createCoachWithExpiredToken(): User

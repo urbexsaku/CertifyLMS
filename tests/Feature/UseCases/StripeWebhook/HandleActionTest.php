@@ -9,9 +9,11 @@ use App\Enums\PaymentStatus;
 use App\Models\Payment;
 use App\UseCases\StripeWebhook\HandleAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Group;
 use Stripe\Webhook;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class HandleActionTest extends TestCase
 {
     use RefreshDatabase;
@@ -172,13 +174,16 @@ class HandleActionTest extends TestCase
                 'object' => [
                     'object' => 'checkout.session',
                     'id' => 'cs_expired',
-                    'metadata' => ['payment_id' => $payment->id],
+                    'metadata' => [
+                        'payment_id' => $payment->id,
+                    ],
                 ],
             ],
         ]);
 
         // Assert
         $this->assertSame(PaymentStatus::Failed, $payment->fresh()->status);
+
         $this->assertDatabaseMissing('meeting_quota_transactions', [
             'related_payment_id' => $payment->id,
         ]);
@@ -257,6 +262,47 @@ class HandleActionTest extends TestCase
         // Assert
         $this->assertDatabaseCount('payments', 0);
         $this->assertDatabaseCount('meeting_quota_transactions', 0);
+    }
+
+    public function test_duplicate_completed_event_does_not_grant_quota_twice(): void
+    {
+        // Arrange
+        $payment = Payment::factory()->pending()->create([
+            'amount' => 9000,
+            'quantity' => 3,
+            'stripe_checkout_session_id' => 'cs_duplicate',
+        ]);
+
+        $event = [
+            'id' => 'evt_duplicate',
+            'type' => 'checkout.session.completed',
+            'data' => [
+                'object' => [
+                    'object' => 'checkout.session',
+                    'id' => 'cs_duplicate',
+                    'metadata' => ['payment_id' => $payment->id],
+                    'payment_status' => 'paid',
+                    'payment_intent' => 'pi_duplicate',
+                    'amount_total' => 9000,
+                    'currency' => 'jpy',
+                ],
+            ],
+        ];
+
+        // Act
+        $this->handleEvent($event);
+        $this->handleEvent($event);
+
+        // Assert
+        $this->assertSame(PaymentStatus::Succeeded, $payment->fresh()->status);
+
+        $this->assertDatabaseCount('meeting_quota_transactions', 1);
+
+        $this->assertDatabaseHas('meeting_quota_transactions', [
+            'related_payment_id' => $payment->id,
+            'type' => MeetingQuotaTransactionType::Purchased->value,
+            'amount' => 3,
+        ]);
     }
 
     /**

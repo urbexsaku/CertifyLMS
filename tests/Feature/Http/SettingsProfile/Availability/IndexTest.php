@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\SettingsProfile\Availability;
 
 use App\Models\CoachAvailability;
+use App\Models\GoogleCredential;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -65,6 +66,44 @@ class IndexTest extends TestCase
         // Assert
         $response->assertOk();
         $this->assertSame(0, $response->viewData('availabilities')->count());
+    }
+
+    public function test_coach_can_view_availability_page_with_unconnected_google_calendar(): void
+    {
+        // Arrange
+        $coach = User::factory()->coach()->create();
+
+        // Act
+        $response = $this->actingAs($coach)->get(route('settings.availability.index'));
+
+        // Assert
+        $response->assertOk();
+        $response->assertSee('Googleカレンダー連携');
+        $response->assertSee('未連携');
+        $response->assertSee('Googleカレンダーと連携する');
+    }
+
+    public function test_coach_can_view_availability_page_with_connected_google_calendar(): void
+    {
+        // Arrange
+        $coach = User::factory()->coach()->create();
+
+        GoogleCredential::factory()
+            ->for($coach, 'user')
+            ->create([
+                'calendar_id' => 'primary',
+            ]);
+
+        // Act
+        $response = $this->actingAs($coach)->get(route('settings.availability.index'));
+
+        // Assert
+        $response->assertOk();
+        $response->assertSee('Googleカレンダー連携');
+        $response->assertSee('連携中');
+        $response->assertSee('primary');
+        $response->assertSee('連携日時');
+        $response->assertSee('連携を解除する');
     }
 
     public function test_student_is_forbidden_on_availability_endpoint(): void
