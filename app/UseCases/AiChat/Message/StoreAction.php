@@ -9,7 +9,6 @@ use App\Exceptions\AiChat\GeminiApiException;
 use App\Models\AiChatConversation;
 use App\Models\AiChatMessage;
 use App\Models\User;
-use App\Services\AiChatDailyLimitService;
 use App\Services\GeminiService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -31,7 +30,6 @@ final class StoreAction
 
     public function __construct(
         private readonly GeminiService $geminiService,
-        private readonly AiChatDailyLimitService $dailyLimitService,
     ) {}
 
     /**
@@ -59,14 +57,7 @@ final class StoreAction
             ->exists();
 
         [$userMessage, $assistantMessage] = DB::transaction(
-            function () use ($user, $conversation, $content): array {
-                User::query()
-                    ->whereKey($user->id)
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $this->dailyLimitService->assertCanSend($user);
-
+            function () use ($conversation, $content): array {
                 $userMessage = $conversation->messages()->create([
                     'role' => 'user',
                     'content' => $content,

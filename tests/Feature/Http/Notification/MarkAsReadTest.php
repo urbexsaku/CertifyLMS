@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\Http\Notification;
 
 use App\Models\ChatRoom;
+use App\Models\Meeting;
 use App\Models\QaThread;
 use App\Models\User;
 use App\Notifications\ChatMessageReceivedNotification;
 use App\Notifications\MeetingCanceledNotification;
+use App\Notifications\MeetingReminderNotification;
 use App\Notifications\MeetingReservedNotification;
 use App\Notifications\QaReplyReceivedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -166,6 +168,64 @@ class MarkAsReadTest extends TestCase
         $response = $this->actingAs($coach)->post(route('notifications.markAsRead', $notification->id));
 
         $response->assertRedirect(route('coach.meetings.index'));
+
+        $notification->refresh();
+        $this->assertNotNull($notification->read_at);
+    }
+
+    public function test_mark_as_read_redirects_to_student_meeting_show_for_reminder_notification(): void
+    {
+        $coach = User::factory()->coach()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create();
+
+        $notification = $student->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => MeetingReminderNotification::class,
+            'data' => [
+                'notification_type' => 'meeting_reminder',
+                'meeting_id' => $meeting->id,
+                'window' => 'eve',
+                'route_params' => ['meeting' => $meeting->id],
+                'title' => '面談前日リマインドテスト',
+                'message' => '面談前日リマインドテストです。',
+                'body' => '面談前日リマインドテストです。',
+            ],
+            'read_at' => null,
+        ]);
+
+        $response = $this->actingAs($student)->post(route('notifications.markAsRead', $notification->id));
+
+        $response->assertRedirect(route('meetings.show', $meeting->id));
+
+        $notification->refresh();
+        $this->assertNotNull($notification->read_at);
+    }
+
+    public function test_mark_as_read_redirects_to_coach_meeting_show_for_reminder_notification(): void
+    {
+        $coach = User::factory()->coach()->create();
+        $student = User::factory()->student()->inProgress()->create();
+        $meeting = Meeting::factory()->reserved()->forCoach($coach)->forStudent($student)->create();
+
+        $notification = $coach->notifications()->create([
+            'id' => (string) Str::uuid(),
+            'type' => MeetingReminderNotification::class,
+            'data' => [
+                'notification_type' => 'meeting_reminder',
+                'meeting_id' => $meeting->id,
+                'window' => 'eve',
+                'route_params' => ['meeting' => $meeting->id],
+                'title' => '面談前日リマインドテスト',
+                'message' => '面談前日リマインドテストです。',
+                'body' => '面談前日リマインドテストです。',
+            ],
+            'read_at' => null,
+        ]);
+
+        $response = $this->actingAs($coach)->post(route('notifications.markAsRead', $notification->id));
+
+        $response->assertRedirect(route('meetings.show', $meeting->id));
 
         $notification->refresh();
         $this->assertNotNull($notification->read_at);

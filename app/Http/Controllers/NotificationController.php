@@ -76,7 +76,8 @@ class NotificationController extends Controller
 
         $action($request->user());
 
-        return redirect()->route('notifications.index');
+        return redirect()->route('notifications.index')
+            ->with('success', '全ての通知を既読にしました。');
     }
 
     private function resolveNotificationUrl(Request $request, DatabaseNotification $notification): string
@@ -107,6 +108,12 @@ class NotificationController extends Controller
                     $request->user()->role === UserRole::Coach
                         ? 'coach.meetings.index'
                         : 'meetings.index'
+                ),
+
+                'meeting_reminder' => $this->resolveParameterizedRoute(
+                    'meetings.show',
+                    $params,
+                    'meeting'
                 ),
 
                 'admin_announcement' => route(

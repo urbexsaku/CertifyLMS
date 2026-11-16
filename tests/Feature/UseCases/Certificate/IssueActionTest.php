@@ -9,11 +9,13 @@ use App\Exceptions\Certification\CertificateAlreadyIssuedException;
 use App\Exceptions\Certification\EnrollmentNotPassedException;
 use App\Models\Certificate;
 use App\Models\Enrollment;
+use App\Services\CertificatePdfGeneratorService;
 use App\UseCases\Certificate\IssueAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class IssueActionTest extends TestCase
@@ -42,6 +44,11 @@ class IssueActionTest extends TestCase
         $this->assertSame($enrollment->id, $certificate->enrollment_id);
         $this->assertSame($enrollment->certification_id, $certificate->certification_id);
         $this->assertDatabaseHas('certificates', ['id' => $certificate->id]);
+
+        // PDFがprivateディスクに保存されていること
+        $this->assertTrue(
+            Storage::disk('private')->exists($certificate->pdf_path)
+        );
     }
 
     public function test_throws_when_enrollment_not_passed(): void
@@ -99,5 +106,40 @@ class IssueActionTest extends TestCase
         }
 
         $this->assertSame(1, Certificate::query()->where('enrollment_id', $enrollment->id)->count());
+    }
+
+    public function test_rolls_back_certificate_and_deletes_pdf_when_pdf_generation_fails(): void
+    {
+        Storage::fake('private');
+
+        $enrollment = Enrollment::factory()->passed()->create();
+        $pdfPath = null;
+
+        $this->mock(CertificatePdfGeneratorService::class)
+            ->shouldReceive('generate')
+            ->once()
+            ->withArgs(function (Certificate $certificate) use (&$pdfPath): bool {
+                $pdfPath = $certificate->pdf_path;
+
+                Storage::disk('private')->put($pdfPath, '%PDF-test');
+
+                return true;
+            })
+            ->andThrow(new RuntimeException('PDF generation failed.'));
+
+        try {
+            $this->app->make(IssueAction::class)($enrollment);
+
+            $this->fail('PDF生成失敗時は例外が発生するはず');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('PDF generation failed.', $exception->getMessage());
+        }
+
+        $this->assertDatabaseMissing('certificates', [
+            'enrollment_id' => $enrollment->id,
+        ]);
+
+        $this->assertNotNull($pdfPath);
+        Storage::disk('private')->assertMissing($pdfPath);
     }
 }

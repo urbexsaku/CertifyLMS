@@ -13,6 +13,7 @@ use App\Models\Meeting;
 use App\Models\User;
 use App\Notifications\MeetingReservedNotification;
 use App\Services\CoachMeetingLoadService;
+use App\Services\GoogleCalendarService;
 use App\Services\MeetingAvailabilityService;
 use App\Services\MeetingQuotaService;
 use App\UseCases\MeetingQuota\ConsumeQuotaAction;
@@ -21,6 +22,8 @@ use Carbon\Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * 受講生の予約申請を作成するユースケース。
@@ -32,6 +35,7 @@ final class StoreAction
 {
     public function __construct(
         private readonly MeetingAvailabilityService $availabilityService,
+        private readonly GoogleCalendarService $googleCalendarService,
         private readonly CoachMeetingLoadService $coachLoadService,
         private readonly MeetingQuotaService $quotaService,
         private readonly ConsumeQuotaAction $consumeAction,
@@ -87,9 +91,22 @@ final class StoreAction
 
             $meeting->update(['meeting_quota_transaction_id' => $transaction->id]);
 
-            $meeting = $meeting->fresh(['coach']);
+            $meeting = $meeting->fresh(['coach.googleCredential']);
 
             DB::afterCommit(function () use ($meeting): void {
+                // Google Calendar 未連携の場合はイベント登録をスキップする。
+                if ($meeting->coach->googleCredential !== null) {
+                    try {
+                        $this->googleCalendarService->createMeetingEvent($meeting);
+                    } catch (Throwable $exception) {
+                        Log::warning('Google Calendar への面談予定登録に失敗しました。', [
+                            'meeting_id' => $meeting->id,
+                            'coach_id' => $meeting->coach_id,
+                            'exception' => $exception->getMessage(),
+                        ]);
+                    }
+                }
+
                 ($this->sendNotificationAction)($meeting->coach, new MeetingReservedNotification);
             });
 
@@ -98,16 +115,21 @@ final class StoreAction
     }
 
     /**
-     * 担当コーチ集合のうち、(1) 当該時刻に有効な availability 枠があり、
-     * (2) 当該時刻に reserved / completed の Meeting を持たないコーチ集合を返す。
+     * 担当コーチ集合のうち、以下の条件を満たすコーチ集合を返す。
+     *
+     * (1) 当該時刻に有効な availability 枠がある。
+     * (2) 当該時刻に reserved / completed の Meeting を持たない。
+     * (3) Google Calendar に当該面談時間と重複する予定がない。
      *
      * @return Collection<int, User>
      */
     private function findAvailableCoaches(Certification $certification, Carbon $scheduledAt): Collection
     {
         $time = $scheduledAt->format('H:i:s');
+        $meetingEnd = $scheduledAt->copy()->addHour();
 
-        return $certification->coaches()
+        $candidates = $certification->coaches()
+            ->with('googleCredential')
             ->whereHas('coachAvailabilities', function ($q) use ($scheduledAt, $time) {
                 $q->where('day_of_week', $scheduledAt->dayOfWeek)
                     ->where('is_active', true)
@@ -119,5 +141,37 @@ final class StoreAction
                     ->whereIn('status', [MeetingStatus::Reserved->value, MeetingStatus::Completed->value]);
             })
             ->get();
+
+        return $candidates
+            ->reject(function (User $coach) use ($scheduledAt, $meetingEnd): bool {
+                if ($coach->googleCredential === null) {
+                    return false;
+                }
+
+                try {
+                    $busyPeriods = $this->googleCalendarService->busyPeriods(
+                        $coach,
+                        $scheduledAt,
+                        $meetingEnd,
+                    );
+
+                    return $busyPeriods->contains(
+                        fn (array $period) => (
+                            $scheduledAt->lt($period['end'])
+                            && $meetingEnd->gt($period['start'])
+                        ),
+                    );
+                } catch (Throwable $exception) {
+                    Log::warning('Google Calendar の予定取得に失敗しました。', [
+                        'coach_id' => $coach->id,
+                        'scheduled_at' => $scheduledAt->toIso8601String(),
+                        'exception' => $exception->getMessage(),
+                    ]);
+
+                    // API エラーではコーチを候補から除外せず、LMS の予約処理を継続する。
+                    return false;
+                }
+            })
+            ->values();
     }
 }

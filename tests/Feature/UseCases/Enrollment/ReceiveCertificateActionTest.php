@@ -14,6 +14,7 @@ use App\Models\MockExamSession;
 use App\Models\User;
 use App\UseCases\Enrollment\ReceiveCertificateAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -26,6 +27,8 @@ class ReceiveCertificateActionTest extends TestCase
 
     public function test_successfully_issues_certificate_and_records_status_log_when_all_published_exams_passed(): void
     {
+        Storage::fake('private');
+
         $student = User::factory()->student()->inProgress()->create();
         $certification = Certification::factory()->published()->create();
         $enrollment = Enrollment::factory()->for($student)->for($certification)->learning()->create();
@@ -36,11 +39,18 @@ class ReceiveCertificateActionTest extends TestCase
 
         $this->assertSame($enrollment->id, $certificate->enrollment_id);
         $this->assertSame($student->id, $certificate->user_id);
+
+        $this->assertTrue(
+            Storage::disk('private')->exists($certificate->pdf_path)
+        );
+
         $this->assertDatabaseHas('enrollments', [
             'id' => $enrollment->id,
             'status' => EnrollmentStatus::Passed->value,
         ]);
+
         $this->assertNotNull($enrollment->refresh()->passed_at);
+
         $this->assertDatabaseHas('enrollment_status_logs', [
             'enrollment_id' => $enrollment->id,
             'from_status' => EnrollmentStatus::Learning->value,

@@ -10,9 +10,12 @@ use App\Exceptions\Mentoring\MeetingStatusTransitionException;
 use App\Models\Meeting;
 use App\Models\User;
 use App\Notifications\MeetingCanceledNotification;
+use App\Services\GoogleCalendarService;
 use App\UseCases\MeetingQuota\RefundQuotaAction;
 use App\UseCases\Notification\SendNotificationAction;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * 当事者（受講生またはコーチ）による面談キャンセルを処理するユースケース。
@@ -24,6 +27,7 @@ final class CancelAction
     public function __construct(
         private readonly RefundQuotaAction $refundAction,
         private readonly SendNotificationAction $sendNotificationAction,
+        private readonly GoogleCalendarService $googleCalendarService,
     ) {}
 
     /**
@@ -59,7 +63,18 @@ final class CancelAction
                 ? $lockedMeeting->coach
                 : $lockedMeeting->student;
 
-            DB::afterCommit(function () use ($recipient): void {
+            DB::afterCommit(function () use ($lockedMeeting, $recipient): void {
+                try {
+                    $this->googleCalendarService->deleteMeetingEvent($lockedMeeting);
+                } catch (Throwable $exception) {
+                    Log::warning('Google Calendar の面談予定削除に失敗しました。', [
+                        'meeting_id' => $lockedMeeting->id,
+                        'coach_id' => $lockedMeeting->coach_id,
+                        'google_calendar_event_id' => $lockedMeeting->google_calendar_event_id,
+                        'exception' => $exception->getMessage(),
+                    ]);
+                }
+
                 ($this->sendNotificationAction)($recipient, new MeetingCanceledNotification);
             });
         });

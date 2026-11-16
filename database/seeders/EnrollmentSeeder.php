@@ -14,6 +14,7 @@ use App\Models\Certification;
 use App\Models\Enrollment;
 use App\Models\EnrollmentStatusLog;
 use App\Models\User;
+use App\Services\CertificatePdfGeneratorService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -153,6 +154,56 @@ final class EnrollmentSeeder extends Seeder
                 ],
             );
         }
+
+        // 固定 student に修了証ダウンロード確認用の passed Enrollment を 1 件用意する。
+        $certification = $publishedCerts->firstWhere('name', 'PMP');
+
+        if ($certification === null) {
+            return;
+        }
+
+        $passedAt = now()->subDays(7);
+
+        $enrollment = Enrollment::firstOrCreate(
+            [
+                'user_id' => $student->id,
+                'certification_id' => $certification->id,
+            ],
+            [
+                'status' => EnrollmentStatus::Passed->value,
+                'current_term' => TermType::MockPractice->value,
+                'exam_date' => now()->subDays(10)->toDateString(),
+                'passed_at' => $passedAt,
+            ],
+        );
+
+        EnrollmentStatusLog::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'to_status' => EnrollmentStatus::Learning->value,
+            ],
+            [
+                'from_status' => null,
+                'changed_by_user_id' => $student->id,
+                'changed_at' => $enrollment->created_at,
+                'changed_reason' => '新規登録',
+            ],
+        );
+
+        EnrollmentStatusLog::firstOrCreate(
+            [
+                'enrollment_id' => $enrollment->id,
+                'to_status' => EnrollmentStatus::Passed->value,
+            ],
+            [
+                'from_status' => EnrollmentStatus::Learning->value,
+                'changed_by_user_id' => $student->id,
+                'changed_at' => $enrollment->passed_at,
+                'changed_reason' => '受講生による修了証受領',
+            ],
+        );
+
+        $this->issueCertificate($enrollment, $enrollment->passed_at);
     }
 
     /**
@@ -255,5 +306,7 @@ final class EnrollmentSeeder extends Seeder
             ->create([
                 'issued_at' => $passedAt ?? now(),
             ]);
+
+        app(CertificatePdfGeneratorService::class)->generate($certificate);
     }
 }

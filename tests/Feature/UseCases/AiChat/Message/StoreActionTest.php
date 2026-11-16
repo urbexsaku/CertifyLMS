@@ -30,7 +30,6 @@ class StoreActionTest extends TestCase
             'ai-chat.gemini.timeout' => 30,
             'ai-chat.gemini.temperature' => 0.7,
             'ai-chat.conversation.history_limit' => 20,
-            'ai-chat.conversation.daily_limit' => 50,
             'ai-chat.title.auto_generation_enabled' => false,
         ]);
     }
@@ -367,135 +366,6 @@ class StoreActionTest extends TestCase
         });
     }
 
-    public function test_it_rejects_message_when_daily_limit_has_been_reached(): void
-    {
-        // Arrange
-        $user = User::factory()->student()->create();
-        $conversation = $this->createConversation($user);
-
-        for ($i = 0; $i < 50; $i++) {
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => "質問{$i}",
-                'status' => 'completed',
-            ]);
-        }
-
-        Http::fake();
-        $this->actingAs($user);
-
-        // Act
-        try {
-            app(StoreAction::class)($conversation, '上限後の質問です。');
-            $this->fail('HttpResponseException が発生する必要があります。');
-        } catch (HttpResponseException $exception) {
-            // Assert
-            $this->assertSame(429, $exception->getResponse()->getStatusCode());
-        }
-
-        Http::assertNothingSent();
-
-        $this->assertSame(50, $conversation->messages()->where('role', 'user')->count());
-    }
-
-    public function test_it_allows_fiftieth_message_when_daily_count_is_forty_nine(): void
-    {
-        // Arrange
-        $user = User::factory()->student()->create();
-        $conversation = $this->createConversation($user);
-
-        for ($i = 0; $i < 49; $i++) {
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => "質問{$i}",
-                'status' => 'completed',
-            ]);
-        }
-
-        Http::fakeSequence()
-            ->push($this->successResponse('50回目の回答です。'), 200);
-
-        $this->actingAs($user);
-
-        // Act
-        $result = app(StoreAction::class)($conversation, '50回目の質問です。');
-
-        // Assert
-        $this->assertSame('50回目の回答です。', $result['assistant_message']->content);
-        $this->assertSame(50, $conversation->messages()->where('role', 'user')->count());
-        Http::assertSentCount(1);
-    }
-
-    public function test_failed_api_requests_are_counted_toward_daily_limit(): void
-    {
-        // Arrange
-        $user = User::factory()->student()->create();
-        $conversation = $this->createConversation($user);
-
-        for ($i = 0; $i < 49; $i++) {
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => "質問{$i}",
-                'status' => 'completed',
-            ]);
-        }
-
-        Http::fake([
-            '*' => Http::response(['error' => 'API error'], 500),
-        ]);
-
-        $this->actingAs($user);
-
-        // Act
-        try {
-            app(StoreAction::class)($conversation, '失敗する質問です。');
-            $this->fail('HttpResponseException が発生する必要があります。');
-        } catch (HttpResponseException $exception) {
-            // Assert
-            $this->assertSame(502, $exception->getResponse()->getStatusCode());
-        }
-
-        $this->assertSame(50, $conversation->messages()->where('role', 'user')->count());
-
-        try {
-            app(StoreAction::class)($conversation, '上限後の質問です。');
-            $this->fail('HttpResponseException が発生する必要があります。');
-        } catch (HttpResponseException $exception) {
-            $this->assertSame(429, $exception->getResponse()->getStatusCode());
-        }
-
-        Http::assertSentCount(3);
-    }
-
-    public function test_daily_limit_is_reset_at_japan_midnight(): void
-    {
-        // Arrange
-        $this->travelTo(now()->setTimezone('Asia/Tokyo')->setTime(0, 5));
-
-        $user = User::factory()->student()->create();
-        $conversation = $this->createConversation($user);
-
-        $conversation->messages()->create([
-            'role' => 'user',
-            'content' => '前日の質問です。',
-            'status' => 'completed',
-            'created_at' => now()->subMinutes(10),
-            'updated_at' => now()->subMinutes(10),
-        ]);
-
-        Http::fakeSequence()
-            ->push($this->successResponse('回答です。'), 200);
-
-        $this->actingAs($user);
-
-        // Act
-        $result = app(StoreAction::class)($conversation, '当日の質問です。');
-
-        // Assert
-        $this->assertSame('回答です。', $result['assistant_message']->content);
-        Http::assertSentCount(1);
-    }
-
     public function test_it_generates_title_after_first_successful_answer(): void
     {
         // Arrange
@@ -655,39 +525,6 @@ class StoreActionTest extends TestCase
         );
         $this->assertNull($result['conversation']->title_generated_at);
         Http::assertSentCount(2);
-    }
-
-    public function test_daily_limit_counts_messages_across_all_user_conversations(): void
-    {
-        // Arrange
-        $user = User::factory()->student()->create();
-        $conversation = $this->createConversation($user);
-        $otherConversation = $this->createConversation($user);
-
-        for ($i = 0; $i < 50; $i++) {
-            $otherConversation->messages()->create([
-                'role' => 'user',
-                'content' => "質問{$i}",
-                'status' => 'completed',
-            ]);
-        }
-
-        Http::fake();
-        $this->actingAs($user);
-
-        // Act
-        try {
-            app(StoreAction::class)($conversation, '上限後の質問です。');
-            $this->fail('HttpResponseException が発生する必要があります。');
-        } catch (HttpResponseException $exception) {
-            // Assert
-            $this->assertSame(429, $exception->getResponse()->getStatusCode());
-        }
-
-        Http::assertNothingSent();
-
-        $this->assertSame(0, $conversation->messages()->count());
-        $this->assertSame(50, $otherConversation->messages()->where('role', 'user')->count());
     }
 
     private function createConversation(User $user): AiChatConversation

@@ -8,6 +8,7 @@ use App\Enums\AiChatMessageStatus;
 use App\Models\AiChatConversation;
 use App\Models\Enrollment;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -21,6 +22,7 @@ class StoreTest extends TestCase
         parent::setUp();
 
         config([
+            'cache.default' => 'array',
             'ai-chat.enabled' => true,
             'ai-chat.gemini.api_key' => 'test-api-key',
             'ai-chat.gemini.model' => 'gemini-3.5-flash-lite',
@@ -217,17 +219,23 @@ class StoreTest extends TestCase
         $student = $this->createActiveStudent();
         $conversation = $this->createConversation($student);
 
-        for ($i = 0; $i < 50; $i++) {
-            $conversation->messages()->create([
-                'role' => 'user',
-                'content' => "質問{$i}",
-                'status' => 'completed',
-            ]);
-        }
-
-        Http::fake();
+        Http::fake([
+            '*' => Http::response(
+                $this->successResponse('AIからの回答です。'),
+                200,
+            ),
+        ]);
 
         // Act
+        for ($i = 0; $i < 50; $i++) {
+            $this->actingAs($student)
+                ->postJson(
+                    route('ai-chat.conversations.messages.store', $conversation),
+                    ['content' => "質問{$i}"],
+                )
+                ->assertOk();
+        }
+
         $response = $this->actingAs($student)
             ->postJson(
                 route('ai-chat.conversations.messages.store', $conversation),
@@ -235,9 +243,13 @@ class StoreTest extends TestCase
             );
 
         // Assert
-        $response->assertStatus(429);
+        $response->assertStatus(429)
+            ->assertJsonPath(
+                'message',
+                "本日の利用上限に達しました。\n明日 0:00 以降に再度ご利用ください。",
+            );
 
-        Http::assertNothingSent();
+        Http::assertSentCount(50);
 
         $this->assertSame(
             50,
@@ -261,6 +273,192 @@ class StoreTest extends TestCase
 
         // Assert
         $response->assertNotFound();
+    }
+
+    public function test_daily_limit_is_independent_for_each_user(): void
+    {
+        // Arrange
+        config(['ai-chat.conversation.daily_limit' => 2]);
+
+        $student = $this->createActiveStudent();
+        $otherStudent = $this->createActiveStudent();
+
+        $conversation = $this->createConversation($student);
+        $otherConversation = $this->createConversation($otherStudent);
+
+        Http::fake([
+            '*' => Http::response(
+                $this->successResponse('AIからの回答です。'),
+                200,
+            ),
+        ]);
+
+        // Act
+        for ($i = 0; $i < 2; $i++) {
+            $this->actingAs($student)
+                ->postJson(
+                    route('ai-chat.conversations.messages.store', $conversation),
+                    ['content' => "質問{$i}"],
+                )
+                ->assertOk();
+        }
+
+        $response = $this->actingAs($otherStudent)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $otherConversation),
+                ['content' => '別ユーザーの質問です。'],
+            );
+
+        // Assert
+        $response->assertOk()
+            ->assertJsonPath('user_message.content', '別ユーザーの質問です。');
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_failed_api_requests_are_counted_toward_daily_limit(): void
+    {
+        // Arrange
+        config(['ai-chat.conversation.daily_limit' => 2]);
+
+        $student = $this->createActiveStudent();
+        $conversation = $this->createConversation($student);
+
+        Http::fakeSequence()
+            ->push($this->successResponse('正常な回答です。'), 200)
+            ->push(['error' => 'API error'], 500)
+            ->push(['error' => 'API error'], 500)
+            ->push(['error' => 'API error'], 500);
+
+        // Act
+        $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $conversation),
+                ['content' => '正常な質問です。'],
+            )
+            ->assertOk();
+
+        $failedResponse = $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $conversation),
+                ['content' => '失敗する質問です。'],
+            );
+
+        $failedResponse->assertStatus(502);
+
+        $limitedResponse = $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $conversation),
+                ['content' => '上限後の質問です。'],
+            );
+
+        // Assert
+        $limitedResponse->assertStatus(429);
+
+        $this->assertSame(
+            2,
+            $conversation->messages()->where('role', 'user')->count(),
+        );
+
+        // 正常なAPIリクエスト1回 + 失敗したAPIリクエストのリトライ3回
+        Http::assertSentCount(4);
+    }
+
+    public function test_daily_limit_is_shared_across_conversations(): void
+    {
+        // Arrange
+        config(['ai-chat.conversation.daily_limit' => 2]);
+
+        $student = $this->createActiveStudent();
+
+        $firstConversation = $this->createConversation($student);
+        $secondConversation = $this->createConversation($student);
+
+        Http::fake([
+            '*' => Http::response(
+                $this->successResponse('AIからの回答です。'),
+                200,
+            ),
+        ]);
+
+        // Act
+        $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $firstConversation),
+                ['content' => '1回目の質問です。'],
+            )
+            ->assertOk();
+
+        $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $secondConversation),
+                ['content' => '2回目の質問です。'],
+            )
+            ->assertOk();
+
+        $response = $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $secondConversation),
+                ['content' => '3回目の質問です。'],
+            );
+
+        // Assert
+        $response->assertStatus(429);
+
+        Http::assertSentCount(2);
+    }
+
+    public function test_daily_limit_is_reset_at_japan_midnight(): void
+    {
+        // Arrange
+        config(['ai-chat.conversation.daily_limit' => 2]);
+
+        $this->travelTo(
+            Carbon::parse('2026-11-17 23:55:00', 'Asia/Tokyo'),
+        );
+
+        $student = $this->createActiveStudent();
+        $conversation = $this->createConversation($student);
+
+        Http::fake([
+            '*' => Http::response(
+                $this->successResponse('AIからの回答です。'),
+                200,
+            ),
+        ]);
+
+        // Act
+        for ($i = 0; $i < 2; $i++) {
+            $this->actingAs($student)
+                ->postJson(
+                    route('ai-chat.conversations.messages.store', $conversation),
+                    ['content' => "日付変更前の質問{$i}"],
+                )
+                ->assertOk();
+        }
+
+        $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $conversation),
+                ['content' => '上限到達後の質問です。'],
+            )
+            ->assertStatus(429);
+
+        $this->travelTo(
+            Carbon::parse('2026-11-18 00:01:00', 'Asia/Tokyo'),
+        );
+
+        $response = $this->actingAs($student)
+            ->postJson(
+                route('ai-chat.conversations.messages.store', $conversation),
+                ['content' => '日付変更後の質問です。'],
+            );
+
+        // Assert
+        $response->assertOk()
+            ->assertJsonPath('user_message.content', '日付変更後の質問です。');
+
+        Http::assertSentCount(3);
     }
 
     private function createActiveStudent(): User

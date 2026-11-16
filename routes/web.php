@@ -7,6 +7,7 @@ use App\Http\Controllers\AiChatMessageController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Auth\OnboardingController;
 use App\Http\Controllers\BrowseController;
+use App\Http\Controllers\CertificateController;
 use App\Http\Controllers\CertificationCatalogController;
 use App\Http\Controllers\CertificationCategoryController;
 use App\Http\Controllers\CertificationCoachAssignmentController;
@@ -23,6 +24,7 @@ use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LearningHourTargetController;
 use App\Http\Controllers\MeetingController;
 use App\Http\Controllers\MeetingPackController;
+use App\Http\Controllers\MeetingQuotaCheckoutController;
 use App\Http\Controllers\MeetingQuotaHistoryController;
 use App\Http\Controllers\MockExamAnswerController;
 use App\Http\Controllers\MockExamCatalogController;
@@ -48,9 +50,11 @@ use App\Http\Controllers\SectionQuizController;
 use App\Http\Controllers\SectionQuizResultController;
 use App\Http\Controllers\Settings\AvailabilityController as SettingsAvailabilityController;
 use App\Http\Controllers\Settings\AvatarController;
+use App\Http\Controllers\Settings\GoogleCalendarController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SettingsDefaultEnrollmentController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\WeakDrillController;
 use App\Http\Controllers\WeakDrillResultController;
@@ -86,6 +90,10 @@ Route::middleware('auth')->group(function () {
     Route::get('enrollments/{enrollment}', [EnrollmentController::class, 'show'])
         ->withTrashed()
         ->name('enrollments.show');
+
+    // 修了証PDFダウンロード(3 ロール共有、認可は CertificatePolicy で判定)
+    Route::get('certificates/{certificate}/download', [CertificateController::class, 'download'])
+        ->name('certificates.download');
 });
 
 // ============================================================
@@ -542,6 +550,13 @@ Route::middleware(['auth', 'role:coach'])
 Route::middleware(['auth', 'role:student', 'active-learning'])->prefix('meeting-quota')->name('meeting-quota.')->group(function () {
     // 面談回数履歴
     Route::get('history', [MeetingQuotaHistoryController::class, 'index'])->name('history');
+
+    // 追加面談購入
+    Route::get('checkout', [MeetingQuotaCheckoutController::class, 'index'])->name('checkout.select');
+    Route::post('checkout', [MeetingQuotaCheckoutController::class, 'store'])->name('checkout.create');
+
+    // 決済完了画面
+    Route::get('success', [MeetingQuotaCheckoutController::class, 'success'])->name('checkout.success');
 });
 
 // ========================================
@@ -622,7 +637,26 @@ Route::middleware([
         Route::patch('conversations/{conversation}', [AiChatConversationController::class, 'update'])->name('conversations.update');
         Route::delete('conversations/{conversation}', [AiChatConversationController::class, 'destroy'])->name('conversations.destroy');
 
-        Route::post('conversations/{conversation}/messages', [AiChatMessageController::class, 'store'])->name('conversations.messages.store');
+        Route::middleware('throttle:ai-chat')->group(function () {
+            Route::post('conversations/{conversation}/messages', [AiChatMessageController::class, 'store'])->name('conversations.messages.store');
+        });
+    });
+
+// ============================================================
+// コーチ専用ルート — Google Calendar連携
+// ============================================================
+Route::middleware(['auth', 'role:coach'])
+    ->prefix('settings')
+    ->name('settings.')
+    ->group(function () {
+        Route::get('google-calendar/connect', [GoogleCalendarController::class, 'redirect'])
+            ->name('google-calendar.redirect');
+
+        Route::get('google-calendar/callback', [GoogleCalendarController::class, 'callback'])
+            ->name('google-calendar.callback');
+
+        Route::delete('google-calendar', [GoogleCalendarController::class, 'destroy'])
+            ->name('google-calendar.destroy');
     });
 
 // ============================================================
@@ -633,3 +667,8 @@ if (app()->environment('local')) {
         return view('_dev.components');
     })->name('_dev.components');
 }
+
+// ============================================================
+// Stripe Webhook
+// ============================================================
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle'])->name('webhooks.stripe');

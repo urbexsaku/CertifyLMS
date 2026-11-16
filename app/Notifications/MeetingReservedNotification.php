@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace App\Notifications;
 
 use App\Enums\UserRole;
-use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
-use Illuminate\Notifications\Notification;
 
 /**
  * 面談予約通知。
@@ -15,10 +13,8 @@ use Illuminate\Notifications\Notification;
  * 面談が予約された際に、担当コーチへ
  * アプリ内通知およびメール通知を送信する。
  */
-class MeetingReservedNotification extends Notification
+class MeetingReservedNotification extends BaseNotification
 {
-    use Queueable;
-
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
