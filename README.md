@@ -142,7 +142,8 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 
 `.env.example` をコピーするだけで、基本機能をローカルで動作させられます（メールは Mailpit に配信されます）。
 
-- `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません。
+- `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
+- `GEMINI_API_KEY` — AI チャットを利用する場合は、Google AI Studio で取得した API キーを設定してください。
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — コーチの Google Calendar 連携に使用します。Google Cloud Console で OAuth クライアントを作成し、Google Calendar API を有効化してください。コールバック URL（`http://localhost:8000/settings/google-calendar/callback`）を登録し、OAuth 同意画面をテストモードにする場合は、連携するアカウントをテストユーザーに追加してください。
 
 ### Stripe連携（追加面談購入）
