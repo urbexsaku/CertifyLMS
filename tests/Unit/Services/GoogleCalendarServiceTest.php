@@ -26,6 +26,132 @@ class GoogleCalendarServiceTest extends TestCase
 
     private array $history = [];
 
+    public function test_throws_exception_when_event_is_not_found(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'google_calendar_event_id' => 'deleted-google-event-123',
+            ]);
+
+        $service = $this->createService([
+            new Response(
+                404,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'error' => [
+                        'code' => 404,
+                        'message' => 'Not Found',
+                    ],
+                ], JSON_THROW_ON_ERROR)
+            ),
+        ]);
+
+        try {
+            $service->deleteMeetingEvent($meeting);
+
+            $this->fail('404エラー時に例外が発生しませんでした。');
+        } catch (GoogleServiceException $exception) {
+            $this->assertSame(404, $exception->getCode());
+        }
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => 'deleted-google-event-123',
+        ]);
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString(
+            '/events/deleted-google-event-123',
+            (string) $this->history[0]['request']->getUri()
+        );
+    }
+
+    public function test_treats_already_deleted_event_as_success(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'google_calendar_event_id' => 'deleted-google-event-123',
+            ]);
+
+        $service = $this->createService([
+            new Response(
+                410,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'error' => [
+                        'code' => 410,
+                        'message' => 'Resource has been deleted',
+                        'errors' => [
+                            [
+                                'domain' => 'global',
+                                'reason' => 'deleted',
+                                'message' => 'Resource has been deleted',
+                            ],
+                        ],
+                    ],
+                ], JSON_THROW_ON_ERROR)
+            ),
+        ]);
+
+        $service->deleteMeetingEvent($meeting);
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => null,
+        ]);
+
+        $this->assertCount(1, $this->history);
+        $this->assertStringContainsString(
+            '/events/deleted-google-event-123',
+            (string) $this->history[0]['request']->getUri()
+        );
+    }
+
+    public function test_keeps_event_id_when_google_calendar_returns_server_error(): void
+    {
+        $coach = $this->createCoachWithValidToken();
+
+        $meeting = Meeting::factory()
+            ->forCoach($coach)
+            ->create([
+                'google_calendar_event_id' => 'google-event-123',
+            ]);
+
+        $service = $this->createService([
+            new Response(
+                500,
+                ['Content-Type' => 'application/json'],
+                json_encode([
+                    'error' => [
+                        'code' => 500,
+                        'message' => 'Internal Server Error',
+                    ],
+                ], JSON_THROW_ON_ERROR)
+            ),
+        ]);
+
+        try {
+            $service->deleteMeetingEvent($meeting);
+
+            $this->fail('500エラー時に例外が発生しませんでした。');
+        } catch (GoogleServiceException $exception) {
+            $this->assertSame(500, $exception->getCode());
+        }
+
+        $this->assertDatabaseHas('meetings', [
+            'id' => $meeting->id,
+            'google_calendar_event_id' => 'google-event-123',
+        ]);
+
+        $this->assertCount(1, $this->history);
+    }
+
     public function test_refreshes_access_token_before_fetching_busy_periods(): void
     {
         $coach = $this->createCoachWithExpiredToken();
