@@ -22,8 +22,8 @@
 ### 1. リポジトリの clone
 
 ```bash
-git clone <このリポジトリの URL>
-cd <リポジトリ名>
+git clone git@github.com:urbexsaku/CertifyLMS.git
+cd CertifyLMS
 ```
 
 ### 2. 環境変数ファイルの作成
@@ -83,6 +83,50 @@ Blade / CSS / JS を編集しながら開発する場合は、`build` の代わ�
 ### 8. 動作確認
 
 http://localhost:8000 にアクセスし、下記の[ログインアカウント](#ログインアカウント)でログインできればセットアップ完了です。
+
+### 9. キューワーカーの起動
+
+本アプリケーションでは、通知やメール送信などの非同期処理にデータベースキューを使用しています。キューワーカーを起動していない場合、キューに登録された通知やメールなどの非同期処理は実行されません。
+
+キューに登録されたジョブを処理するため、アプリケーションとは別のターミナルでワーカーを起動してください。
+
+```bash
+sail artisan queue:work database --queue=notifications,default
+```
+
+開発中はこのコマンドを実行したままにしてください。停止する場合は `Ctrl + C` を押します。
+
+#### 失敗したジョブの確認・再実行
+
+処理に失敗したジョブは、以下のコマンドで確認・再実行できます。
+
+```bash
+sail artisan queue:failed
+```
+
+すべての失敗ジョブを再実行する場合：
+
+```bash
+sail artisan queue:retry all
+```
+
+特定のジョブだけを再実行する場合：
+
+```bash
+sail artisan queue:retry {id}
+```
+
+`{id}` には `queue:failed` で確認したジョブの ID を指定してください。
+
+### 10. スケジューラーの起動
+
+本アプリケーションでは、面談リマインダーや期限切れデータの自動処理など、定期実行する処理にLaravelのスケジューラーを使用しています。
+
+ローカル環境で定期処理を実行するため、キューワーカーとは別のターミナルで以下を起動してください。
+
+```bash
+sail artisan schedule:work
+```
 
 ## 開発環境 URL
 
@@ -145,12 +189,15 @@ sail bin pint --test     # 整形漏れの確認（CI 相当のチェック）
 - `PUSHER_*` — チャットのリアルタイム配信に使用します。有効にする場合は Pusher のキーを取得して設定し、`BROADCAST_DRIVER=pusher` に変更してください。未設定（既定の `BROADCAST_DRIVER=log`）でもメッセージの送受信自体は動作し、相手画面へのリアルタイム反映のみ行われません
 - `GEMINI_API_KEY` — AI チャットを利用する場合は、Google AI Studio で取得した API キーを設定してください。
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — コーチの Google Calendar 連携に使用します。Google Cloud Console で OAuth クライアントを作成し、Google Calendar API を有効化してください。コールバック URL（`http://localhost:8000/settings/google-calendar/callback`）を登録し、OAuth 同意画面をテストモードにする場合は、連携するアカウントをテストユーザーに追加してください。
+- `STRIPE_KEY` / `STRIPE_SECRET` / `STRIPE_WEBHOOK_SECRET` — 追加面談購入機能のテスト決済に使用します。設定方法は [Stripe連携](#stripe連携追加面談購入) を参照してください。
 
-### Stripe連携（追加面談購入）
+新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。
+
+## Stripe連携（追加面談購入）
 
 追加面談の購入機能を確認する場合は、Stripeのテスト環境を使用します。
 
-#### 1. Stripeの環境変数設定
+### 1. Stripeの環境変数設定
 
 `.env` にStripeのテスト用キーを設定します。
 
@@ -162,7 +209,7 @@ STRIPE_WEBHOOK_SECRET=whsec_xxxxxxxxx
 
 各キーはStripe Dashboardのテスト環境から取得してください。
 
-#### 2. Webhookの設定
+### 2. Webhookの設定
 
 ローカル環境でStripeのWebhookを受信するため、Stripe CLIを使用してWebhookイベントを転送します。
 
@@ -181,7 +228,7 @@ stripe listen --forward-to http://localhost:8000/webhooks/stripe
 - `checkout.session.async_payment_failed`
 - `checkout.session.expired`
 
-#### 3. テスト用カード情報
+### 3. テスト用カード情報
 
 Stripe Checkoutのテスト決済では、以下のカード情報を使用できます。
 
@@ -193,5 +240,3 @@ Stripe Checkoutのテスト決済では、以下のカード情報を使用で�
 | 郵便番号 | 任意の値 |
 
 ※ Stripeが提供するテスト用カード番号です。実際の請求は発生しません。
-
-新しい環境変数やセットアップ手順を追加した場合は、`.env.example` と本 README に追記し、チームの誰でも環境を再現できる状態を保ってください。

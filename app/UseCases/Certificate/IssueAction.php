@@ -30,6 +30,10 @@ final class IssueAction
     ) {}
 
     /**
+     * @param Enrollment $enrollment 修了証を発行する受講登録
+     *
+     * @return Certificate 発行された修了証
+     *
      * @throws EnrollmentNotPassedException 受講登録が修了状態ではない
      * @throws CertificateAlreadyIssuedException 同一 Enrollment で修了証が既発行
      */

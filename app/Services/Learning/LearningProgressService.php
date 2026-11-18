@@ -19,7 +19,11 @@ use Illuminate\Support\Facades\DB;
 final class LearningProgressService
 {
     /**
-     * 学習進捗 (Section→Chapter→Part→資格 完了率) の 4 階層サマリを算出する。
+     * Enrollment の学習進捗を4階層で集計する。
+     *
+     * @param Enrollment $enrollment 集計対象の受講登録
+     *
+     * @return ProgressSummary 学習進捗の集計結果
      */
     public function summarize(Enrollment $enrollment): ProgressSummary
     {
@@ -110,6 +114,13 @@ final class LearningProgressService
         return $result;
     }
 
+    /**
+     * 公開済み Section の総数と完了数を取得する。
+     *
+     * @param Enrollment $enrollment 集計対象の受講登録
+     *
+     * @return object{sections_total: int, sections_completed: int}
+     */
     private function fetchSectionTotals(Enrollment $enrollment): object
     {
         return DB::table('sections')
@@ -127,6 +138,13 @@ final class LearningProgressService
             ->first() ?? (object) ['sections_total' => 0, 'sections_completed' => 0];
     }
 
+    /**
+     * 配下の公開済み Section をすべて完了した Chapter の数を取得する。
+     *
+     * @param Enrollment $enrollment 集計対象の受講登録
+     *
+     * @return int 完了した Chapter 数
+     */
     private function countCompletedChapters(Enrollment $enrollment): int
     {
         // 公開済 Chapter のうち、配下の公開済 Section が全て読了済かを Chapter 単位で判定。
@@ -157,6 +175,13 @@ final class LearningProgressService
         return $completed;
     }
 
+    /**
+     * 配下の公開済み Section をすべて完了した Part の数を取得する。
+     *
+     * @param Enrollment $enrollment 集計対象の受講登録
+     *
+     * @return int 完了した Part 数
+     */
     private function countCompletedParts(Enrollment $enrollment): int
     {
         $rows = DB::table('parts')
