@@ -21,9 +21,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Mockery;
+use PHPUnit\Framework\Attributes\Group;
 use RuntimeException;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class StoreActionGoogleCalendarTest extends TestCase
 {
     use RefreshDatabase;

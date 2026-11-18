@@ -223,10 +223,17 @@ class GoogleCalendarService
             function () use ($meeting): void {
                 $calendar = $this->calendarClient($meeting->coach);
 
-                $calendar->events->delete(
-                    'primary',
-                    $meeting->google_calendar_event_id,
-                );
+                try {
+                    $calendar->events->delete(
+                        'primary',
+                        $meeting->google_calendar_event_id,
+                    );
+                } catch (Exception $exception) {
+                    // 既に削除済みのイベントは、削除成功と同じ扱いにする。
+                    if ($exception->getCode() !== 410) {
+                        throw $exception;
+                    }
+                }
 
                 $meeting->update([
                     'google_calendar_event_id' => null,
