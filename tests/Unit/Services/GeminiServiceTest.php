@@ -13,9 +13,12 @@ use App\Models\Part;
 use App\Models\Section;
 use App\Models\User;
 use App\Services\GeminiService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class GeminiServiceTest extends TestCase
 {
     private function setGeminiConfig(): void
@@ -386,5 +389,36 @@ class GeminiServiceTest extends TestCase
             $request['systemInstruction']['parts'][0]['text'],
             '対象外資格',
         ));
+    }
+
+    public function test_throws_exception_when_connection_fails_after_three_attempts(): void
+    {
+        // Arrange
+        $this->setGeminiConfig();
+
+        $attempts = 0;
+
+        Http::fake(function () use (&$attempts) {
+            $attempts++;
+
+            throw new ConnectionException('Connection failed.');
+        });
+
+        // Act
+        try {
+            app(GeminiService::class)->generateResponse([
+                ['role' => 'user', 'content' => '質問'],
+            ]);
+
+            $this->fail('接続に3回失敗した場合は例外が発生するはず');
+        } catch (GeminiApiException $exception) {
+            // Assert
+            $this->assertInstanceOf(
+                ConnectionException::class,
+                $exception->getPrevious(),
+            );
+        }
+
+        $this->assertSame(3, $attempts);
     }
 }

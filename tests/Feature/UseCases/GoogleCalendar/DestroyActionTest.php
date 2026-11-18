@@ -11,9 +11,11 @@ use App\Services\GoogleCalendarService;
 use App\UseCases\GoogleCalendar\DestroyAction as GoogleCalendarDestroyAction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
+use PHPUnit\Framework\Attributes\Group;
 use RuntimeException;
 use Tests\TestCase;
 
+#[Group('external-api')]
 class DestroyActionTest extends TestCase
 {
     use RefreshDatabase;
