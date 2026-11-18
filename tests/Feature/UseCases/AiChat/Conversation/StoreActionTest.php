@@ -14,10 +14,8 @@ use App\Models\User;
 use App\UseCases\AiChat\Conversation\StoreAction;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
-#[Group('external-api')]
 class StoreActionTest extends TestCase
 {
     use RefreshDatabase;

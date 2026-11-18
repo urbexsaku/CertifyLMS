@@ -7,10 +7,8 @@ namespace Tests\Feature\Http\AiChat\Conversation;
 use App\Models\Enrollment;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
-#[Group('external-api')]
 class StoreTest extends TestCase
 {
     use RefreshDatabase;
