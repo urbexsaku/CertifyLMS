@@ -22,8 +22,8 @@
 ### 1. リポジトリの clone
 
 ```bash
-git clone <このリポジトリの URL>
-cd <リポジトリ名>
+git clone git@github.com:urbexsaku/CertifyLMS.git
+cd CertifyLMS
 ```
 
 ### 2. 環境変数ファイルの作成
@@ -91,7 +91,7 @@ http://localhost:8000 にアクセスし、下記の[ログインアカウント
 キューに登録されたジョブを処理するため、アプリケーションとは別のターミナルでワーカーを起動してください。
 
 ```bash
-sail artisan queue:work database --queue=default,notifications
+sail artisan queue:work database --queue=notifications,default
 ```
 
 開発中はこのコマンドを実行したままにしてください。停止する場合は `Ctrl + C` を押します。

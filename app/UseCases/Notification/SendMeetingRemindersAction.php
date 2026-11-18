@@ -16,12 +16,12 @@ use Illuminate\Notifications\DatabaseNotification;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * 面談リマインダーの対象を抽出し、受講生とコーチに通知する Action。
+ * 面談リマインダーの対象を抽出し、受講生とコーチに通知を登録する Action。
  *
  * 指定された通知タイミングに該当する予約済み面談を抽出し、
- * 通知済みかどうかを確認した上で、通知対象者にリマインダーを送信する。
+ * 通知済みレコードを確認した上で、通知対象者に通知を登録する。
  *
- * 通知の重複を防ぐため、面談と通知タイミングの組み合わせでロックを取得する。
+ * 同一面談・同一通知タイミングの処理をロックによって直列化する。
  */
 final class SendMeetingRemindersAction
 {
@@ -76,9 +76,7 @@ final class SendMeetingRemindersAction
     }
 
     /**
-     * 面談の参加者にリマインダーを送信する。
-     *
-     * 同一面談・同一通知タイミングでの重複送信を防止する。
+     * 面談の参加者にリマインダー通知を登録する。
      *
      * @param Meeting $meeting 対象の面談
      * @param MeetingReminderWindow $window 通知タイミング
